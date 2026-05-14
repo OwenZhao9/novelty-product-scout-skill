@@ -580,30 +580,21 @@ def main():
         print(f"- {candidate['name']}: {candidate['total_score']} ({candidate['grade']})")
 
 
-def run_scout(profile, signals_path=None, signals_csv_text=None, output_path="output/report.md", no_web=False, limit=5, progress_callback=None):
+def run_scout(profile, signals_path=None, signals_csv_text=None, output_path="output/report.md", no_web=False, limit=5):
     signals = []
-    emit_progress(progress_callback, "读取输入条件，准备采集信源。")
     if signals_path:
         csv_signals = load_csv_signals(signals_path)
         signals.extend(csv_signals)
-        emit_progress(progress_callback, f"读取 CSV 文件线索：{len(csv_signals)} 条。")
     if signals_csv_text:
         csv_signals = load_csv_signals_text(signals_csv_text)
         signals.extend(csv_signals)
-        emit_progress(progress_callback, f"读取粘贴 CSV 线索：{len(csv_signals)} 条。")
     seed_signals = seed_keyword_signals(profile)
     signals.extend(seed_signals)
-    emit_progress(progress_callback, f"生成种子关键词线索：{len(seed_signals)} 条。")
     direct_signals = build_direct_free_source_signals(profile)
     signals.extend(direct_signals)
-    emit_progress(progress_callback, f"生成信源跳转入口：{len(direct_signals)} 条。")
     if not no_web:
-        emit_progress(progress_callback, "开始网页搜索采集。")
-        web_signals = collect_web_signals(profile, limit, progress_callback=progress_callback)
+        web_signals = collect_web_signals(profile, limit)
         signals.extend(web_signals)
-        emit_progress(progress_callback, f"网页搜索采集完成：新增 {len(web_signals)} 条线索。")
-    else:
-        emit_progress(progress_callback, "跳过网页搜索，仅使用种子词和信源入口。")
     if not signals:
         raise SourceDataError("没有采集到公开线索。请增加种子关键词或放宽类目。")
     has_metrics = any(has_real_metric(signal) for signal in signals)
@@ -617,11 +608,9 @@ def run_scout(profile, signals_path=None, signals_csv_text=None, output_path="ou
 
     signals = filter_obviously_irrelevant_signals(signals, profile)
     candidates = build_candidates(signals)
-    emit_progress(progress_callback, f"合并线索：{len(signals)} 条；候选商品：{len(candidates)} 个。")
     score_candidates(candidates, profile)
     filtered = apply_filters(candidates.values(), profile)
     ranked = rank_candidates(filtered, profile)
-    emit_progress(progress_callback, f"评分排序完成：输出 {len(ranked)} 个候选结果。")
 
     report = build_report(profile, ranked)
     output_path = Path(output_path)
@@ -633,12 +622,7 @@ def run_scout(profile, signals_path=None, signals_csv_text=None, output_path="ou
         "report": report,
         "output_path": str(output_path),
         "candidates": [candidate_to_dict(candidate, profile) for candidate in ranked],
-    }
-
-
-def emit_progress(callback, message, level="info", **fields):
-    if callback:
-        callback(message=message, level=level, **fields)
+}
 
 
 def load_or_prompt_profile(path):
@@ -867,26 +851,20 @@ def contains_any(text, words):
     return any(str(word).lower() in text for word in words)
 
 
-def collect_web_signals(profile, limit, progress_callback=None):
+def collect_web_signals(profile, limit):
     queries = prioritized_queries(build_queries(profile), profile)[:MAX_WEB_QUERIES]
     deadline = time.monotonic() + WEB_COLLECTION_BUDGET_SECONDS
     signals = []
-    emit_progress(progress_callback, f"本轮选择 {len(queries)} 个关键搜索入口。")
-    for index, (source, query) in enumerate(queries, start=1):
+    for source, query in queries:
         if time.monotonic() >= deadline:
             message = "达到本轮网页采集时间预算，使用已采集到的线索继续评分。"
-            emit_progress(progress_callback, message, level="warn")
             print(f"Warning: {message}", file=sys.stderr)
             break
-        label = source_label(source)
-        emit_progress(progress_callback, f"[{index}/{len(queries)}] 查询 {label}：{query}", source=source, query=query)
         try:
             results = search_duckduckgo(query, limit=limit)
         except Exception as exc:
-            emit_progress(progress_callback, f"跳过 {label}：{exc}", level="warn", source=source)
             print(f"Warning: failed to collect {source}: {exc}", file=sys.stderr)
             continue
-        before_count = len(signals)
         for result in results:
             product = infer_product_name(result["title"], result["snippet"], profile)
             if not product:
@@ -898,8 +876,6 @@ def collect_web_signals(profile, limit, progress_callback=None):
                 snippet=result["snippet"],
                 link=result["link"],
             ))
-        added = len(signals) - before_count
-        emit_progress(progress_callback, f"完成 {label}：搜索结果 {len(results)} 条，新增线索 {added} 条。", source=source, result_count=len(results), added=added)
         time.sleep(WEB_QUERY_SLEEP_SECONDS)
     return signals
 

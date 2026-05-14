@@ -13,8 +13,6 @@ const exampleButton = document.querySelector("#exampleButton");
 const clearButton = document.querySelector("#clearButton");
 const copyReportButton = document.querySelector("#copyReportButton");
 const exportCsvButton = document.querySelector("#exportCsvButton");
-const clearTerminalButton = document.querySelector("#clearTerminalButton");
-const terminalLog = document.querySelector("#terminalLog");
 const sourceStatus = document.querySelector("#sourceStatus");
 const presetSelects = document.querySelectorAll(".preset-select");
 const unlimitedToggles = document.querySelectorAll(".unlimited-toggle");
@@ -160,8 +158,6 @@ selectOnFocusInputs.forEach((input) => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncPriceRange();
-  resetTerminal();
-  appendTerminal("准备提交采集任务。");
   setRunning(true);
   let timeoutId;
   try {
@@ -188,34 +184,20 @@ form.addEventListener("submit", async (event) => {
 
     const controller = new AbortController();
     timeoutId = window.setTimeout(() => controller.abort(), scoutRequestTimeoutMs);
-    const response = await fetch("/api/scout-stream", {
+    const response = await fetch("/api/scout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
       body: JSON.stringify(payload),
     });
-    let result = null;
+    const result = await response.json();
     if (!response.ok) {
-      throw new Error("采集请求失败");
-    }
-    await readScoutStream(response, (eventData) => {
-      if (eventData.type === "log") {
-        appendTerminal(eventData.message, eventData.level || "info");
-      } else if (eventData.type === "result") {
-        result = eventData.result;
-      } else if (eventData.type === "error") {
-        throw new Error(eventData.message || "采集失败");
-      }
-    });
-    window.clearTimeout(timeoutId);
-    if (!result) {
-      throw new Error("采集结束但没有返回结果");
+      throw new Error(result.error || "采集请求失败");
     }
     allCandidates = result.candidates || [];
     candidates = visibleCandidates();
     activeIndex = 0;
     renderResults(result);
-    appendTerminal(`完成：生成 ${allCandidates.length} 个候选商品。`);
     statusPill.textContent = "Done";
     statusPill.className = "status-pill";
   } catch (error) {
@@ -225,17 +207,12 @@ form.addEventListener("submit", async (event) => {
     emptyState.textContent = error.name === "AbortError"
       ? "采集超时。请减少采集源，或选择快速采集深度后重试。"
       : error.message;
-    appendTerminal(emptyState.textContent, "error");
   } finally {
     if (timeoutId) {
       window.clearTimeout(timeoutId);
     }
     setRunning(false);
   }
-});
-
-clearTerminalButton.addEventListener("click", () => {
-  resetTerminal();
 });
 
 exampleButton.addEventListener("click", () => {
@@ -425,54 +402,6 @@ function setRunning(isRunning) {
     statusPill.textContent = "Running";
     statusPill.className = "status-pill running";
   }
-}
-
-async function readScoutStream(response, onEvent) {
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error("当前浏览器不支持流式采集日志");
-  }
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      handleStreamLine(line, onEvent);
-    }
-  }
-  if (buffer.trim()) {
-    handleStreamLine(buffer, onEvent);
-  }
-}
-
-function handleStreamLine(line, onEvent) {
-  const text = line.trim();
-  if (!text) {
-    return;
-  }
-  onEvent(JSON.parse(text));
-}
-
-function resetTerminal() {
-  if (terminalLog) {
-    terminalLog.textContent = "";
-  }
-}
-
-function appendTerminal(message, level = "info") {
-  if (!terminalLog) {
-    return;
-  }
-  const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
-  const prefix = level === "error" ? "ERROR" : level === "warn" ? "WARN" : "INFO";
-  terminalLog.textContent += `[${time}] ${prefix} ${message}\n`;
-  terminalLog.scrollTop = terminalLog.scrollHeight;
 }
 
 function renderResults(result) {
