@@ -305,6 +305,48 @@ button:disabled {
   white-space: nowrap;
 }
 
+.terminal-panel {
+  margin-bottom: 14px;
+  border: 1px solid #12362d;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0d1815;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  color: #cce7dc;
+  background: #102820;
+  font-size: 13px;
+}
+
+.terminal-clear {
+  grid-column: auto;
+  width: auto;
+  border: 1px solid rgba(204, 231, 220, 0.22);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #cce7dc;
+  background: transparent;
+  font-size: 12px;
+}
+
+#terminalLog {
+  margin: 0;
+  min-height: 130px;
+  max-height: 230px;
+  overflow: auto;
+  padding: 11px;
+  color: #d8f3e8;
+  background: #0d1815;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+}
+
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

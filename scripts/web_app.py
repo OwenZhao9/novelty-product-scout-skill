@@ -22,6 +22,9 @@ class ScoutHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_POST(self):
+        if self.path == "/api/scout-stream":
+            self.handle_scout_stream()
+            return
         if self.path != "/api/scout":
             self.send_error(404)
             return
@@ -46,6 +49,41 @@ class ScoutHandler(SimpleHTTPRequestHandler):
             self.send_json({"error": str(exc)}, status=400)
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=500)
+
+    def handle_scout_stream(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = self.rfile.read(length).decode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Connection", "close")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def progress(**event):
+            self.send_stream_event({"type": "log", **event})
+
+        try:
+            data = json.loads(payload or "{}")
+            profile = normalize_profile(data.get("profile") or {})
+            signals_csv = data.get("signals_csv") or ""
+            no_web = bool(data.get("no_web"))
+            limit = int(data.get("limit") or 3)
+            self.send_stream_event({"type": "log", "level": "info", "message": "任务已接收，开始执行。"})
+            result = run_scout(
+                profile=profile,
+                signals_csv_text=signals_csv,
+                output_path=str(ROOT / "output" / "web-report.md"),
+                no_web=no_web,
+                limit=max(min(limit, 8), 1),
+                progress_callback=progress,
+            )
+            self.send_stream_event({"type": "result", "result": result})
+        except SourceDataError as exc:
+            self.send_stream_event({"type": "error", "message": str(exc)})
+        except BrokenPipeError:
+            return
+        except Exception as exc:
+            self.send_stream_event({"type": "error", "message": str(exc)})
 
     def do_GET(self):
         if self.path == "/api/source-status":
@@ -80,6 +118,11 @@ class ScoutHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def send_stream_event(self, event):
+        line = json.dumps(event, ensure_ascii=False).encode("utf-8") + b"\n"
+        self.wfile.write(line)
+        self.wfile.flush()
 
 
 def normalize_profile(profile):
