@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="zh-CN" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: visible;
+        color: #edf7f4;
+        background: #080d11;
+        font-family: "Noto Sans JP", system-ui, sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #080d11;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        opacity: 0;
+        background:
+          linear-gradient(180deg, rgba(11, 19, 24, 0.98), rgba(5, 8, 11, 1)),
+          #080d11;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        padding: 76px 96px;
+        gap: 34px;
+      }
+
+      .grid {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background-image:
+          linear-gradient(rgba(123, 245, 214, 0.08) 2px, transparent 2px),
+          linear-gradient(90deg, rgba(123, 245, 214, 0.08) 2px, transparent 2px);
+        background-size: 64px 64px;
+        opacity: 0.62;
+      }
+
+      .scan {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient(180deg, rgba(99, 216, 255, 0), rgba(99, 216, 255, 0.12), rgba(99, 216, 255, 0));
+        opacity: 0.38;
+      }
+
+      .glow {
+        position: absolute;
+        width: 720px;
+        height: 720px;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.24;
+      }
+
+      .glow.green {
+        right: -200px;
+        top: -160px;
+        background: #4ce0a2;
+      }
+
+      .glow.cyan {
+        left: -240px;
+        bottom: -260px;
+        background: #63d8ff;
+      }
+
+      .ghost {
+        position: absolute;
+        z-index: 0;
+        color: rgba(237, 247, 244, 0.06);
+        font-family: "Space Grotesk", "Noto Sans JP", sans-serif;
+        font-size: 168px;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .eyebrow {
+        color: #4ce0a2;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2 {
+        font-family: "Space Grotesk", "Noto Sans JP", sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+
+      h1 {
+        max-width: 1160px;
+        font-size: 116px;
+        line-height: 0.95;
+      }
+
+      h2 {
+        max-width: 980px;
+        font-size: 78px;
+        line-height: 1.02;
+      }
+
+      .subtitle {
+        max-width: 980px;
+        color: #b7c9c5;
+        font-size: 34px;
+        font-weight: 650;
+        line-height: 1.42;
+      }
+
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 30px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        border: 2px solid rgba(76, 224, 162, 0.38);
+        border-radius: 8px;
+        padding: 10px 18px;
+        color: #4ce0a2;
+        background: rgba(76, 224, 162, 0.12);
+        font-size: 22px;
+        font-weight: 850;
+      }
+
+      .pill.cyan {
+        color: #63d8ff;
+        border-color: rgba(99, 216, 255, 0.38);
+        background: rgba(99, 216, 255, 0.12);
+      }
+
+      .pill.amber {
+        color: #f2b84b;
+        border-color: rgba(242, 184, 75, 0.44);
+        background: rgba(242, 184, 75, 0.14);
+      }
+
+      .panel {
+        border: 2px solid rgba(179, 214, 205, 0.16);
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)),
+          #0f161b;
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+      }
+
+      .hero-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+        gap: 70px;
+        align-items: center;
+        flex: 1;
+      }
+
+      .signal-stack {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .signal-chip {
+        min-height: 118px;
+        padding: 24px;
+      }
+
+      .signal-chip strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #edf7f4;
+        font-size: 30px;
+      }
+
+      .signal-chip span {
+        color: #8fa09d;
+        font-size: 22px;
+        line-height: 1.35;
+      }
+
+      .radar {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 560px;
+        height: 560px;
+        margin: 0 auto;
+        border: 2px solid rgba(76, 224, 162, 0.2);
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(76, 224, 162, 0.16), rgba(99, 216, 255, 0.04) 46%, rgba(8, 13, 17, 0) 68%);
+      }
+
+      .radar::before,
+      .radar::after {
+        position: absolute;
+        inset: 72px;
+        content: "";
+        border: 2px solid rgba(99, 216, 255, 0.28);
+        border-radius: 50%;
+      }
+
+      .radar::after {
+        inset: 152px;
+        border-color: rgba(76, 224, 162, 0.32);
+      }
+
+      .radar-core {
+        z-index: 2;
+        display: grid;
+        gap: 8px;
+        text-align: center;
+      }
+
+      .radar-core strong {
+        color: #4ce0a2;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 76px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .radar-core span {
+        color: #b7c9c5;
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: 58px;
+        align-items: center;
+        flex: 1;
+      }
+
+      .screenshot-frame {
+        overflow: hidden;
+        border: 2px solid rgba(99, 216, 255, 0.24);
+        border-radius: 8px;
+        background: #0b1318;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+      }
+
+      .screenshot-frame img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .desktop-shot {
+        transform-origin: center;
+      }
+
+      .callouts {
+        display: grid;
+        gap: 18px;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .callout b {
+        display: grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        border: 2px solid rgba(76, 224, 162, 0.34);
+        border-radius: 8px;
+        color: #4ce0a2;
+        background: rgba(76, 224, 162, 0.12);
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 24px;
+      }
+
+      .callout strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 28px;
+      }
+
+      .callout span {
+        color: #9dafab;
+        font-size: 22px;
+        line-height: 1.34;
+      }
+
+      .source-map {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 22px;
+        flex: 1;
+        align-items: center;
+      }
+
+      .source-group {
+        display: grid;
+        gap: 14px;
+        padding: 22px;
+      }
+
+      .source-group h3 {
+        color: #63d8ff;
+        font-size: 24px;
+      }
+
+      .source-node {
+        border: 1px solid rgba(179, 214, 205, 0.18);
+        border-radius: 8px;
+        padding: 13px 15px;
+        color: #edf7f4;
+        background: rgba(255, 255, 255, 0.035);
+        font-size: 21px;
+        font-weight: 800;
+      }
+
+      .engine {
+        position: relative;
+        min-height: 490px;
+        padding: 34px;
+        text-align: center;
+      }
+
+      .engine h3 {
+        margin-bottom: 26px;
+        font-size: 40px;
+      }
+
+      .engine-steps {
+        display: grid;
+        gap: 16px;
+      }
+
+      .engine-step {
+        border: 2px solid rgba(76, 224, 162, 0.22);
+        border-radius: 8px;
+        padding: 18px;
+        color: #4ce0a2;
+        background: rgba(76, 224, 162, 0.1);
+        font-size: 27px;
+        font-weight: 900;
+      }
+
+      .warning-note {
+        margin-top: 26px;
+        color: #f2b84b;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.38;
+      }
+
+      .ranking-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+        gap: 44px;
+        align-items: center;
+        flex: 1;
+      }
+
+      .result-frame img {
+        width: 128%;
+        transform: translateX(-20%);
+      }
+
+      .rank-board {
+        display: grid;
+        gap: 16px;
+      }
+
+      .rank-row {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr) 112px;
+        gap: 20px;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .rank-index {
+        display: grid;
+        place-items: center;
+        width: 58px;
+        height: 58px;
+        border: 2px solid rgba(76, 224, 162, 0.4);
+        border-radius: 8px;
+        color: #4ce0a2;
+        background: rgba(76, 224, 162, 0.12);
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 26px;
+        font-weight: 900;
+      }
+
+      .rank-copy strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 32px;
+      }
+
+      .rank-copy span {
+        color: #9dafab;
+        font-size: 21px;
+        font-weight: 700;
+      }
+
+      .rank-score {
+        color: #4ce0a2;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 48px;
+        font-weight: 900;
+        text-align: right;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        flex: 1;
+        align-content: center;
+      }
+
+      .feature-card {
+        min-height: 210px;
+        padding: 24px;
+      }
+
+      .feature-card h3 {
+        margin-bottom: 14px;
+        color: #edf7f4;
+        font-size: 30px;
+      }
+
+      .feature-card p {
+        color: #9dafab;
+        font-size: 23px;
+        line-height: 1.38;
+      }
+
+      .feature-card .tag {
+        display: inline-flex;
+        margin-bottom: 18px;
+        border: 2px solid rgba(99, 216, 255, 0.28);
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: #63d8ff;
+        background: rgba(99, 216, 255, 0.1);
+        font-size: 20px;
+        font-weight: 850;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 12px;
+      }
+
+      .workflow-step {
+        min-height: 170px;
+        padding: 22px;
+      }
+
+      .workflow-step strong {
+        display: block;
+        margin-bottom: 12px;
+        color: #4ce0a2;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 30px;
+      }
+
+      .workflow-step span {
+        color: #edf7f4;
+        font-size: 25px;
+        font-weight: 850;
+        line-height: 1.3;
+      }
+
+      .cta-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 34px;
+        align-items: center;
+        margin-top: auto;
+        padding: 38px;
+      }
+
+      .cta-card h2 {
+        max-width: 1120px;
+        font-size: 88px;
+      }
+
+      .cta-card p {
+        margin-top: 14px;
+        color: #b7c9c5;
+        font-size: 30px;
+      }
+
+      .export-stack {
+        display: grid;
+        gap: 14px;
+        min-width: 260px;
+      }
+
+      .export-button {
+        border: 2px solid rgba(76, 224, 162, 0.42);
+        border-radius: 8px;
+        padding: 18px 24px;
+        color: #06100d;
+        background: linear-gradient(135deg, #4ce0a2, #63d8ff);
+        font-size: 27px;
+        font-weight: 950;
+        text-align: center;
+      }
+
+      .transition-bar {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        opacity: 0;
+        background: linear-gradient(90deg, rgba(76, 224, 162, 0), rgba(99, 216, 255, 0.75), rgba(242, 184, 75, 0));
+      }
+
+      .fade-group {
+        display: contents;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="35"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div class="transition-bar" data-layout-ignore></div>
+
+      <section id="scene-1" class="scene">
+        <div class="grid" data-layout-ignore></div>
+        <div class="scan" data-layout-ignore></div>
+        <div class="glow green" data-layout-ignore></div>
+        <div class="glow cyan" data-layout-ignore></div>
+        <div class="ghost" style="left: 70px; bottom: 20px;" data-layout-ignore>SIGNAL RADAR</div>
+        <div class="scene-content">
+          <div class="topbar">
+            <span class="eyebrow">E-commerce Skill Promo</span>
+            <span class="pill">Public Signal Intelligence</span>
+          </div>
+          <div class="hero-layout">
+            <div>
+              <h1 class="s1-title">新奇特选品雷达</h1>
+              <p class="subtitle s1-subtitle">把分散的趋势、内容、竞品、供应链和社区痛点，压缩成一张可测试的候选商品清单。</p>
+              <div class="signal-stack" style="margin-top: 42px;">
+                <div class="signal-chip panel"><strong>趋势</strong><span>Google Trends、平台搜索、近期热度</span></div>
+                <div class="signal-chip panel"><strong>内容</strong><span>TikTok 内容、广告创意、视频传播</span></div>
+                <div class="signal-chip panel"><strong>竞品</strong><span>Amazon、Shopee、Lazada、速卖通</span></div>
+                <div class="signal-chip panel"><strong>供应链</strong><span>1688、Alibaba、可采购关键词</span></div>
+              </div>
+            </div>
+            <div class="radar">
+              <div class="radar-core">
+                <strong>01</strong>
+                <span>从灵感到首测清单</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene">
+        <div class="grid" data-layout-ignore></div>
+        <div class="scan" data-layout-ignore></div>
+        <div class="glow cyan" data-layout-ignore></div>
+        <div class="ghost" style="right: -240px; top: 70px;" data-layout-ignore>CONTROL PANEL</div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div>
+              <span class="eyebrow">Step 1 / Guided Input</span>
+              <h2>不是聊天，是傻瓜式选品控制台</h2>
+            </div>
+            <span class="pill cyan mono">20+ SOURCES</span>
+          </div>
+          <div class="split">
+            <div class="screenshot-frame desktop-shot">
+              <img src="assets/app-empty.png" alt="新奇特选品雷达输入界面" />
+            </div>
+            <div class="callouts">
+              <div class="callout panel"><b>01</b><div><strong>市场与平台</strong><span>泰国、TikTok 小店，也可切换东南亚/亚马逊/独立站等场景。</span></div></div>
+              <div class="callout panel"><b>02</b><div><strong>人群 / 类目 / 价格带</strong><span>下拉 + 手填 + 不限，适合不同选品假设。</span></div></div>
+              <div class="callout panel"><b>03</b><div><strong>榜单模式</strong><span>热销、热推、内容传播、类目机会、低风险测试。</span></div></div>
+              <div class="callout panel"><b>04</b><div><strong>种子关键词</strong><span>优先英文产品词，贴近 TikTok 和海外平台搜索。</span></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene">
+        <div class="grid" data-layout-ignore></div>
+        <div class="scan" data-layout-ignore></div>
+        <div class="glow green" data-layout-ignore></div>
+        <div class="ghost" style="left: 80px; top: 42px;" data-layout-ignore>SOURCE MATRIX</div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div>
+              <span class="eyebrow">Step 2 / Public Source Matrix</span>
+              <h2>多信源交叉验证，避免单点误判</h2>
+            </div>
+            <span class="pill amber">公开信号 + 机会评分</span>
+          </div>
+          <div class="source-map">
+            <div class="source-group panel">
+              <h3>趋势 / 内容</h3>
+              <div class="source-node">TikTok / TikTok Shop</div>
+              <div class="source-node">TikTok Creative Center</div>
+              <div class="source-node">Google Trends</div>
+              <div class="source-node">Pinterest Trends</div>
+            </div>
+            <div class="engine panel">
+              <h3>Scoring Core</h3>
+              <div class="engine-steps">
+                <div class="engine-step">去重</div>
+                <div class="engine-step">过滤</div>
+                <div class="engine-step">打分</div>
+                <div class="engine-step">排序</div>
+              </div>
+              <p class="warning-note">销量/GMV 是机会评分估算信号，不伪装成平台真实销量。</p>
+            </div>
+            <div class="source-group panel">
+              <h3>竞品 / 供应链 / 社区</h3>
+              <div class="source-node">Amazon / Shopee / Lazada</div>
+              <div class="source-node">1688 / Alibaba / AliExpress</div>
+              <div class="source-node">Meta Ads / YouTube</div>
+              <div class="source-node">Reddit / Quora / Pantip</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="scene">
+        <div class="grid" data-layout-ignore></div>
+        <div class="scan" data-layout-ignore></div>
+        <div class="glow cyan" data-layout-ignore></div>
+        <div class="ghost" style="right: -150px; bottom: 20px;" data-layout-ignore>OPPORTUNITY BOARD</div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div>
+              <span class="eyebrow">Step 3 / Ranking Reveal</span>
+              <h2>一键生成候选机会看板</h2>
+            </div>
+            <span class="pill mono">4 CANDIDATES</span>
+          </div>
+          <div class="ranking-layout">
+            <div class="rank-board">
+              <div class="rank-row panel"><span class="rank-index">1</span><div class="rank-copy"><strong>pet hair remover</strong><span>A 级机会 · 高可信 · 销量信号 632</span></div><span class="rank-score">84</span></div>
+              <div class="rank-row panel"><span class="rank-index">2</span><div class="rank-copy"><strong>cat grooming brush</strong><span>A 级机会 · 高可信 · GMV 信号 ฿453,750</span></div><span class="rank-score">79</span></div>
+              <div class="rank-row panel"><span class="rank-index">3</span><div class="rank-copy"><strong>cat window hammock</strong><span>内容演示强 · 适合礼物场景</span></div><span class="rank-score">79</span></div>
+              <div class="rank-row panel"><span class="rank-index">4</span><div class="rank-copy"><strong>interactive cat toy</strong><span>短视频钩子清晰 · 可小预算测试</span></div><span class="rank-score">79</span></div>
+            </div>
+            <div class="screenshot-frame result-frame" data-layout-allow-overflow>
+              <img src="assets/app-results.png" alt="新奇特选品雷达结果看板" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-5" class="scene">
+        <div class="grid" data-layout-ignore></div>
+        <div class="scan" data-layout-ignore></div>
+        <div class="glow green" data-layout-ignore></div>
+        <div class="ghost" style="left: -100px; bottom: 12px;" data-layout-ignore>DEEP ANALYSIS</div>
+        <div class="scene-content">
+          <div class="topbar">
+            <div>
+              <span class="eyebrow">Step 4 / Explainable Output</span>
+              <h2>不是简单列表，而是完整首测方案</h2>
+            </div>
+            <span class="pill cyan">Evidence Links</span>
+          </div>
+          <div class="feature-grid">
+            <div class="feature-card panel"><span class="tag">机会判断</span><h3>为什么值得测</h3><p>给出上榜原因、评分拆解、可信度和竞品密度。</p></div>
+            <div class="feature-card panel"><span class="tag">数据证据</span><h3>可点击信源</h3><p>TikTok、Google Trends、Amazon、Shopee 等跳转验证。</p></div>
+            <div class="feature-card panel"><span class="tag">供应链</span><h3>中英文采购词</h3><p>生成 1688、Alibaba、AliExpress 搜索关键词。</p></div>
+            <div class="feature-card panel"><span class="tag">内容脚本</span><h3>短视频钩子</h3><p>痛点型、前后对比型、猎奇反转型脚本方向。</p></div>
+            <div class="feature-card panel"><span class="tag">风险核查</span><h3>先避坑再投放</h3><p>合规、侵权、物流、退货、差评主题逐项核查。</p></div>
+            <div class="feature-card panel"><span class="tag">测试计划</span><h3>小预算验证</h3><p>样品、素材、点击率、询单质量，决定是否加预算。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-6" class="scene" data-layout-ignore>
+        <div class="fade-group">
+          <div class="grid" data-layout-ignore></div>
+          <div class="scan" data-layout-ignore></div>
+          <div class="glow cyan" data-layout-ignore></div>
+          <div class="ghost" style="right: 44px; top: 52px; font-size: 126px;" data-layout-ignore>READY TO DEMO</div>
+          <div class="scene-content">
+            <div class="topbar">
+              <span class="eyebrow">Workflow Close</span>
+              <span class="pill mono">SKILL READY</span>
+            </div>
+            <div class="workflow">
+              <div class="workflow-step panel"><strong>01</strong><span>输入市场、人群、类目</span></div>
+              <div class="workflow-step panel"><strong>02</strong><span>采集公开信号入口</span></div>
+              <div class="workflow-step panel"><strong>03</strong><span>生成候选商品排序</span></div>
+              <div class="workflow-step panel"><strong>04</strong><span>点击证据链接复核</span></div>
+              <div class="workflow-step panel"><strong>05</strong><span>导出报告与 CSV</span></div>
+            </div>
+            <div class="cta-card panel">
+              <div>
+                <h2>从灵感到首测清单</h2>
+                <p>为 TikTok Shop 选品，把流程、证据、风险和测试动作放在一个 skill 里。</p>
+              </div>
+              <div class="export-stack">
+                <div class="export-button">查看 Markdown</div>
+                <div class="export-button">导出 CSV</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const totalDuration = 35;
+      const pulseRepeat = Math.ceil(totalDuration / 2.4) - 1;
+      const scanRepeat = Math.ceil(totalDuration / 3.2) - 1;
+
+      tl.set(".scene", { opacity: 0 }, 0);
+      tl.set("#scene-1", { opacity: 1, x: 0, y: 0, filter: "blur(0px)" }, 0);
+      tl.to(".glow", { scale: 1.08, opacity: 0.3, duration: 1.2, yoyo: true, repeat: pulseRepeat, ease: "sine.inOut" }, 0);
+      tl.fromTo(".scan", { yPercent: -46 }, { yPercent: 46, duration: 1.6, repeat: scanRepeat, ease: "sine.inOut" }, 0);
+
+      function enterScene(id, at, vars = {}) {
+        tl.set(id, { opacity: 1, x: 0, y: 0, filter: "blur(0px)" }, at);
+        tl.fromTo(id, {
+          opacity: 0,
+          x: vars.x || 0,
+          y: vars.y || 0,
+          scale: vars.scale || 1,
+          filter: "blur(14px)"
+        }, {
+          opacity: 1,
+          x: 0,
+          y: 0,
+          scale: 1,
+          filter: "blur(0px)",
+          duration: vars.duration || 0.48,
+          ease: vars.ease || "power3.out"
+        }, at);
+        if (vars.previous) {
+          tl.set(vars.previous, { opacity: 0 }, at + (vars.duration || 0.48));
+        }
+      }
+
+      function scanWipe(at) {
+        tl.fromTo(".transition-bar", { opacity: 0, xPercent: -110 }, { opacity: 1, xPercent: 110, duration: 0.42, ease: "power3.inOut" }, at);
+        tl.set(".transition-bar", { opacity: 0, xPercent: -110 }, at + 0.44);
+      }
+
+      tl.fromTo(".s1-title", { opacity: 0, x: -90, letterSpacing: "0.08em" }, { opacity: 1, x: 0, letterSpacing: "-0.02em", duration: 0.8, ease: "expo.out" }, 0.18);
+      tl.fromTo(".s1-subtitle", { opacity: 0, y: 38 }, { opacity: 1, y: 0, duration: 0.65, ease: "power3.out" }, 0.62);
+      tl.fromTo("#scene-1 .signal-chip", { opacity: 0, y: 58, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.58, stagger: 0.1, ease: "back.out(1.4)" }, 0.95);
+      tl.fromTo("#scene-1 .radar", { opacity: 0, scale: 0.82, rotation: -8 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.9, ease: "elastic.out(1, 0.7)" }, 0.42);
+      tl.fromTo("#scene-1 .radar-core strong", { textContent: 0 }, { textContent: 1, duration: 1.2, snap: { textContent: 1 }, ease: "power2.out" }, 1.0);
+
+      scanWipe(4.82);
+      enterScene("#scene-2", 5, { x: 190, previous: "#scene-1", duration: 0.55, ease: "power3.out" });
+      tl.fromTo("#scene-2 h2", { opacity: 0, x: -70 }, { opacity: 1, x: 0, duration: 0.65, ease: "expo.out" }, 5.18);
+      tl.fromTo("#scene-2 .desktop-shot", { opacity: 0, y: 90, scale: 0.94, rotationY: -10 }, { opacity: 1, y: 0, scale: 1, rotationY: -4, duration: 0.78, ease: "power3.out" }, 5.45);
+      tl.fromTo("#scene-2 .callout", { opacity: 0, x: 70 }, { opacity: 1, x: 0, duration: 0.52, stagger: 0.12, ease: "back.out(1.2)" }, 5.85);
+      tl.fromTo("#scene-2 .pill", { opacity: 0, scale: 0.86 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.8)" }, 6.35);
+
+      scanWipe(10.82);
+      enterScene("#scene-3", 11, { y: 150, previous: "#scene-2", duration: 0.52, ease: "power3.out" });
+      tl.fromTo("#scene-3 h2", { opacity: 0, y: -42 }, { opacity: 1, y: 0, duration: 0.58, ease: "power3.out" }, 11.18);
+      tl.fromTo("#scene-3 .source-group", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.6, stagger: 0.18, ease: "back.out(1.25)" }, 11.55);
+      tl.fromTo("#scene-3 .source-node", { opacity: 0, x: -38 }, { opacity: 1, x: 0, duration: 0.36, stagger: 0.045, ease: "power2.out" }, 11.9);
+      tl.fromTo("#scene-3 .engine", { opacity: 0, scale: 0.84, rotation: -2 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.72, ease: "expo.out" }, 11.7);
+      tl.fromTo("#scene-3 .engine-step", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.1, ease: "power3.out" }, 12.25);
+      tl.fromTo("#scene-3 .warning-note", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" }, 13.2);
+
+      scanWipe(16.72);
+      enterScene("#scene-4", 17, { x: -180, previous: "#scene-3", duration: 0.5, ease: "power4.out" });
+      tl.fromTo("#scene-4 h2", { opacity: 0, x: -60 }, { opacity: 1, x: 0, duration: 0.6, ease: "expo.out" }, 17.15);
+      tl.fromTo("#scene-4 .rank-row", { opacity: 0, x: -88, scale: 0.98 }, { opacity: 1, x: 0, scale: 1, duration: 0.52, stagger: 0.14, ease: "back.out(1.2)" }, 17.55);
+      tl.fromTo("#scene-4 .result-frame", { opacity: 0, x: 110, scale: 0.96 }, { opacity: 1, x: 0, scale: 1, duration: 0.72, ease: "power3.out" }, 17.85);
+      tl.fromTo("#scene-4 .rank-score", { opacity: 0, y: 28, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.42, stagger: 0.12, ease: "back.out(1.8)" }, 18.15);
+
+      scanWipe(22.72);
+      enterScene("#scene-5", 23, { y: -160, previous: "#scene-4", duration: 0.56, ease: "power3.out" });
+      tl.fromTo("#scene-5 h2", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.66, ease: "expo.out" }, 23.18);
+      tl.fromTo("#scene-5 .feature-card", { opacity: 0, y: 72, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.58, stagger: 0.08, ease: "power3.out" }, 23.68);
+      tl.fromTo("#scene-5 .tag", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.34, stagger: 0.06, ease: "power2.out" }, 24.3);
+
+      scanWipe(28.72);
+      enterScene("#scene-6", 29, { x: 170, previous: "#scene-5", duration: 0.58, ease: "power3.out" });
+      tl.fromTo("#scene-6 .workflow-step", { opacity: 0, y: 65 }, { opacity: 1, y: 0, duration: 0.52, stagger: 0.1, ease: "back.out(1.2)" }, 29.35);
+      tl.fromTo("#scene-6 .cta-card", { opacity: 0, scale: 0.94, y: 58 }, { opacity: 1, scale: 1, y: 0, duration: 0.78, ease: "expo.out" }, 30.15);
+      tl.fromTo("#scene-6 .export-button", { opacity: 0, x: 45 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.12, ease: "back.out(1.6)" }, 30.72);
+      tl.to("#scene-6 .fade-group", { opacity: 0, duration: 0.55, ease: "power2.in" }, 34.4);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
