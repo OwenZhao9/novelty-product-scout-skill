@@ -19,6 +19,7 @@ const unlimitedToggles = document.querySelectorAll(".unlimited-toggle");
 const priceMinInput = form.elements.price_min;
 const priceMaxInput = form.elements.price_max;
 const selectOnFocusInputs = document.querySelectorAll('input[name="price_min"], input[name="price_max"]');
+const scoutRequestTimeoutMs = 60000;
 
 let allCandidates = [];
 let candidates = [];
@@ -158,6 +159,7 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   syncPriceRange();
   setRunning(true);
+  let timeoutId;
   try {
     const data = new FormData(form);
     const payload = {
@@ -180,11 +182,15 @@ form.addEventListener("submit", async (event) => {
       limit: Number(data.get("limit") || 3),
     };
 
+    const controller = new AbortController();
+    timeoutId = window.setTimeout(() => controller.abort(), scoutRequestTimeoutMs);
     const response = await fetch("/api/scout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify(payload),
     });
+    window.clearTimeout(timeoutId);
     const result = await response.json();
     if (!response.ok || result.error) {
       throw new Error(result.error || "Failed to run scout");
@@ -199,8 +205,13 @@ form.addEventListener("submit", async (event) => {
     statusPill.textContent = "Error";
     statusPill.className = "status-pill error";
     emptyState.hidden = false;
-    emptyState.textContent = error.message;
+    emptyState.textContent = error.name === "AbortError"
+      ? "采集超时。请减少采集源，或选择快速采集深度后重试。"
+      : error.message;
   } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
     setRunning(false);
   }
 });

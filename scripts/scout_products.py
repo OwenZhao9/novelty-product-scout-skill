@@ -15,6 +15,10 @@ from typing import Any
 
 
 SEARCH_ENDPOINT = "https://duckduckgo.com/html/"
+MAX_WEB_QUERIES = 10
+WEB_QUERY_TIMEOUT_SECONDS = 3
+WEB_COLLECTION_BUDGET_SECONDS = 10
+WEB_QUERY_SLEEP_SECONDS = 0.05
 
 MARKET_REGION_ALIASES = {
     "泰国": "TH",
@@ -844,9 +848,13 @@ def contains_any(text, words):
 
 
 def collect_web_signals(profile, limit):
-    queries = build_queries(profile)
+    queries = prioritized_queries(build_queries(profile), profile)[:MAX_WEB_QUERIES]
+    deadline = time.monotonic() + WEB_COLLECTION_BUDGET_SECONDS
     signals = []
     for source, query in queries:
+        if time.monotonic() >= deadline:
+            print("Warning: web collection time budget reached; using collected signals so far.", file=sys.stderr)
+            break
         try:
             results = search_duckduckgo(query, limit=limit)
         except Exception as exc:
@@ -863,8 +871,62 @@ def collect_web_signals(profile, limit):
                 snippet=result["snippet"],
                 link=result["link"],
             ))
-        time.sleep(0.4)
+        time.sleep(WEB_QUERY_SLEEP_SECONDS)
     return signals
+
+
+def prioritized_queries(queries, profile):
+    mode = profile.get("ranking_mode") or "hot_sales"
+    base_priority = {
+        "seed_tiktok": 10,
+        "tiktok_signal": 12,
+        "tiktok_shop_signal": 14,
+        "seed_tiktok_creative": 15,
+        "tiktok_creative_signal": 16,
+        "seed_google_trends": 18,
+        "trend_signal": 19,
+        "seed_meta_ads": 20,
+        "meta_ads_signal": 21,
+        "seed_youtube": 22,
+        "youtube_signal": 23,
+        "seed_creator": 24,
+        "creator_signal": 25,
+        "seed_sourcing": 28,
+        "sourcing_signal": 29,
+        "seed_alibaba": 30,
+        "alibaba_signal": 31,
+        "amazon_signal": 32,
+        "amazon_movers_signal": 33,
+        "shopee_signal": 34,
+        "lazada_signal": 35,
+        "aliexpress_signal": 36,
+        "pinterest_trend_signal": 38,
+        "seed_pinterest_trends": 39,
+        "reddit_signal": 42,
+        "seed_reddit": 43,
+        "quora_signal": 44,
+        "seed_quora": 45,
+        "pantip_signal": 46,
+        "seed_pantip": 47,
+        "problem_signal": 48,
+        "content_signal": 49,
+    }
+    mode_boosts = {
+        "hot_sales": {"seed_tiktok", "tiktok_signal", "tiktok_shop_signal", "amazon_signal", "shopee_signal", "lazada_signal", "trend_signal"},
+        "hot_push": {"seed_creator", "creator_signal", "seed_tiktok", "seed_youtube", "youtube_signal", "seed_tiktok_creative", "tiktok_creative_signal"},
+        "content_viral": {"seed_tiktok_creative", "tiktok_creative_signal", "seed_youtube", "youtube_signal", "content_signal", "pinterest_trend_signal", "meta_ads_signal"},
+        "category_opportunity": {"trend_signal", "seed_google_trends", "amazon_signal", "shopee_signal", "lazada_signal", "sourcing_signal", "problem_signal"},
+        "low_risk": {"sourcing_signal", "seed_sourcing", "alibaba_signal", "seed_alibaba", "amazon_signal", "problem_signal"},
+    }
+
+    def priority(item):
+        index, (source, _query) = item
+        score = base_priority.get(source, 80)
+        if source in mode_boosts.get(mode, set()):
+            score -= 12
+        return score, index
+
+    return [query for _index, query in sorted(enumerate(queries), key=priority)]
 
 
 def build_queries(profile):
@@ -960,7 +1022,7 @@ def search_duckduckgo(query, limit=5):
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=WEB_QUERY_TIMEOUT_SECONDS) as response:
         body = response.read().decode("utf-8", errors="ignore")
     return parse_duckduckgo_results(body, limit)
 
