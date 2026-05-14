@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Novelty Product Scout</title>
+    <link rel="stylesheet" href="styles.css?v=20260514-9">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="input-panel">
+        <div class="brand-row">
+          <div>
+            <p class="eyebrow">E-commerce Skill</p>
+            <h1>新奇特选品雷达</h1>
+            <p class="tagline">整合趋势、内容广告、竞品、供应链和社区痛点评分</p>
+            <p class="source-status" id="sourceStatus">正在检查数据源...</p>
+          </div>
+          <span class="status-pill" id="statusPill">Ready</span>
+        </div>
+
+        <form id="scoutForm" class="form-grid">
+          <label>
+            市场
+            <input name="market" value="泰国" list="marketOptions" autocomplete="off">
+          </label>
+          <label>
+            平台
+            <input name="platform" value="TikTok 小店" list="platformOptions" autocomplete="off">
+          </label>
+          <input type="hidden" name="data_source_mode" value="public">
+          <label>
+            人群
+            <span class="unlimited-row"><input type="checkbox" class="unlimited-toggle" data-target="audience"> 不限</span>
+            <input name="audience" value="养猫人群" list="audienceOptions" autocomplete="off">
+            <select class="preset-select" data-fill="audience" aria-label="推荐人群">
+              <option value="">选择推荐人群...</option>
+            </select>
+          </label>
+          <label>
+            类目
+            <span class="unlimited-row"><input type="checkbox" class="unlimited-toggle" data-target="category"> 不限</span>
+            <input name="category" value="宠物用品" list="categoryOptions" autocomplete="off">
+            <select class="preset-select" data-fill="category" aria-label="推荐类目">
+              <option value="">选择推荐类目...</option>
+            </select>
+          </label>
+          <div class="price-range-group">
+            <span class="field-title">价格带</span>
+            <input type="hidden" name="price_range" value="">
+            <div class="price-range-fields">
+              <label>
+                最低值
+                <input name="price_min" value="0" inputmode="decimal" autocomplete="off">
+              </label>
+              <label>
+                最高值
+                <input name="price_max" value="无限大" inputmode="decimal" autocomplete="off">
+              </label>
+            </div>
+          </div>
+          <label>
+            货币单位
+            <select name="currency">
+              <option value="THB" selected>泰铢</option>
+              <option value="CNY">人民币</option>
+              <option value="VND">越南盾</option>
+              <option value="SGD">新加坡元</option>
+              <option value="USD">美元</option>
+              <option value="PHP">菲律宾比索</option>
+              <option value="MYR">马来西亚林吉特</option>
+            </select>
+          </label>
+          <label>
+            榜单模式
+            <select name="ranking_mode">
+              <option value="hot_sales">热销潜力榜</option>
+              <option value="hot_push">热推潜力榜</option>
+              <option value="content_viral">内容传播榜</option>
+              <option value="category_opportunity">类目机会榜</option>
+              <option value="low_risk">低风险测试榜</option>
+            </select>
+          </label>
+          <label>
+            周期
+            <select name="cycle">
+              <option value="week">周榜</option>
+              <option value="day">天榜</option>
+              <option value="month">月榜</option>
+            </select>
+          </label>
+          <label>
+            采集深度
+            <select name="limit">
+              <option value="3">标准：每源 3 条</option>
+              <option value="5">更深：每源 5 条</option>
+              <option value="1">快速：每源 1 条</option>
+            </select>
+          </label>
+          <fieldset class="wide source-grid">
+            <legend>采集源</legend>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="tiktok" checked>TikTok 小店</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="tiktok_creative" checked>TikTok Creative Center</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="google_trends" checked>Google Trends</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="meta_ads" checked>Meta 广告库</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="pinterest_trends" checked>Pinterest Trends</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="amazon" checked>亚马逊</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="amazon_movers" checked>Amazon 飙升榜</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="shopee" checked>Shopee 泰国</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="lazada" checked>Lazada 泰国</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="aliexpress" checked>速卖通</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="1688" checked>1688/阿里巴巴</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="alibaba" checked>Alibaba 国际站</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="creator" checked>达人/联盟</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="problem" checked>痛点搜索</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="reddit" checked>Reddit</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="quora" checked>Quora</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="pantip" checked>Pantip 泰国社区</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="youtube" checked>YouTube</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="xiaohongshu" checked>小红书</label>
+            <label class="checkbox-row"><input type="checkbox" name="data_sources" value="douyin">抖音</label>
+          </fieldset>
+          <label class="wide">
+            偏好
+            <textarea name="preferences" rows="2">轻小件, 视觉演示强, 合规风险低, 容易找货源</textarea>
+          </label>
+          <label class="wide">
+            种子关键词
+            <textarea name="seed_keywords" rows="3">cat grooming brush, pet hair remover, cat window hammock, interactive cat toy</textarea>
+          </label>
+          <div class="button-row wide">
+            <button type="button" class="secondary-button" id="exampleButton">一键示例</button>
+            <button type="button" class="secondary-button" id="clearButton">清空</button>
+          </div>
+          <button type="submit" id="runButton">开始选品分析</button>
+
+          <datalist id="marketOptions">
+            <option value="美国">
+            <option value="英国">
+            <option value="欧盟">
+            <option value="东南亚">
+            <option value="泰国">
+            <option value="越南">
+            <option value="印尼">
+            <option value="马来西亚">
+            <option value="菲律宾">
+            <option value="新加坡">
+            <option value="日本">
+          </datalist>
+          <datalist id="platformOptions">
+            <option value="TikTok 小店">
+            <option value="抖音">
+            <option value="小红书">
+            <option value="亚马逊">
+            <option value="独立站">
+            <option value="Temu">
+            <option value="虾皮">
+            <option value="Lazada">
+          </datalist>
+          <datalist id="audienceOptions">
+            <option value="cat owners">
+            <option value="dog owners">
+            <option value="pet owners">
+            <option value="small apartment pet owners">
+            <option value="new pet parents">
+            <option value="new parents">
+            <option value="pregnant women">
+            <option value="new moms">
+            <option value="toddlers parents">
+            <option value="parents of school kids">
+            <option value="elderly caregivers">
+            <option value="seniors">
+            <option value="college students">
+            <option value="high school students">
+            <option value="young professionals">
+            <option value="office workers">
+            <option value="remote workers">
+            <option value="teachers">
+            <option value="nurses">
+            <option value="small business owners">
+            <option value="content creators">
+            <option value="livestream sellers">
+            <option value="TikTok creators">
+            <option value="gamers">
+            <option value="phone photographers">
+            <option value="home cooks">
+            <option value="bakers">
+            <option value="coffee lovers">
+            <option value="meal prep users">
+            <option value="cleaning enthusiasts">
+            <option value="home organizers">
+            <option value="renters">
+            <option value="small apartment residents">
+            <option value="plant lovers">
+            <option value="beauty users">
+            <option value="skincare users">
+            <option value="makeup beginners">
+            <option value="hair care users">
+            <option value="nail art users">
+            <option value="fitness beginners">
+            <option value="yoga users">
+            <option value="home workout users">
+            <option value="runners">
+            <option value="cyclists">
+            <option value="outdoor campers">
+            <option value="fitness beginners">
+            <option value="car owners">
+            <option value="motorcycle riders">
+            <option value="ride-share drivers">
+            <option value="travelers">
+            <option value="backpackers">
+            <option value="business travelers">
+            <option value="gift buyers">
+            <option value="party hosts">
+            <option value="DIY users">
+            <option value="gardeners">
+            <option value="Muslim women">
+            <option value="budget shoppers">
+            <option value="impulse buyers">
+            <option value="猫主人 cat owners">
+            <option value="狗主人 dog owners">
+            <option value="新手妈妈 new moms">
+            <option value="办公室人群 office workers">
+            <option value="租房人群 renters">
+            <option value="小户型家庭 small apartment residents">
+            <option value="美妆用户 beauty users">
+            <option value="健身新手 fitness beginners">
+            <option value="汽车用户 car owners">
+            <option value="旅行人群 travelers">
+          </datalist>
+          <datalist id="categoryOptions">
+            <option value="pet supplies">
+            <option value="pet grooming tools">
+            <option value="pet toys">
+            <option value="pet feeding supplies">
+            <option value="pet cleaning supplies">
+            <option value="pet travel accessories">
+            <option value="pet beds and furniture">
+            <option value="cat supplies">
+            <option value="dog supplies">
+            <option value="home organization">
+            <option value="storage organizers">
+            <option value="closet organizers">
+            <option value="desk organizers">
+            <option value="shoe storage">
+            <option value="laundry accessories">
+            <option value="cleaning tools">
+            <option value="floor cleaning tools">
+            <option value="dust removal tools">
+            <option value="kitchen cleaning tools">
+            <option value="bathroom accessories">
+            <option value="home decor">
+            <option value="wall decor">
+            <option value="seasonal decor">
+            <option value="lighting">
+            <option value="LED lighting">
+            <option value="night lights">
+            <option value="smart home gadgets">
+            <option value="kitchen gadgets">
+            <option value="kitchen storage">
+            <option value="cooking tools">
+            <option value="cutting and peeling tools">
+            <option value="drinkware">
+            <option value="coffee accessories">
+            <option value="tea accessories">
+            <option value="baking tools">
+            <option value="food storage">
+            <option value="beauty tools">
+            <option value="personal care tools">
+            <option value="skincare devices">
+            <option value="facial cleansing tools">
+            <option value="hair styling tools">
+            <option value="makeup accessories">
+            <option value="nail tools">
+            <option value="massage tools">
+            <option value="bath and body accessories">
+            <option value="phone accessories">
+            <option value="electronics accessories">
+            <option value="charging accessories">
+            <option value="cable organizers">
+            <option value="phone holders and stands">
+            <option value="tablet accessories">
+            <option value="computer accessories">
+            <option value="desk setup gadgets">
+            <option value="keyboard and mouse accessories">
+            <option value="camera accessories">
+            <option value="creator gear">
+            <option value="livestream accessories">
+            <option value="audio accessories">
+            <option value="wearable accessories">
+            <option value="car accessories">
+            <option value="motorcycle accessories">
+            <option value="car cleaning tools">
+            <option value="car storage organizers">
+            <option value="car phone mounts">
+            <option value="car interior accessories">
+            <option value="outdoor gear">
+            <option value="camping gear">
+            <option value="travel accessories">
+            <option value="luggage organizers">
+            <option value="portable travel gadgets">
+            <option value="sports accessories">
+            <option value="fitness accessories">
+            <option value="yoga accessories">
+            <option value="running accessories">
+            <option value="home workout equipment">
+            <option value="baby products">
+            <option value="mom and baby accessories">
+            <option value="baby feeding accessories">
+            <option value="baby safety products">
+            <option value="stroller accessories">
+            <option value="office gadgets">
+            <option value="school supplies">
+            <option value="stationery">
+            <option value="desk accessories">
+            <option value="study tools">
+            <option value="toys and hobbies">
+            <option value="educational toys">
+            <option value="fidget toys">
+            <option value="collectibles">
+            <option value="party supplies">
+            <option value="gift packaging">
+            <option value="DIY tools">
+            <option value="hand tools">
+            <option value="home repair gadgets">
+            <option value="garden tools">
+            <option value="plant care tools">
+            <option value="fashion accessories">
+            <option value="hair accessories">
+            <option value="scarves and hats">
+            <option value="jewelry accessories">
+            <option value="bags and luggage">
+            <option value="wallets and card holders">
+            <option value="travel bags">
+            <option value="shoes accessories">
+            <option value="Muslim fashion accessories">
+            <option value="health and wellness accessories">
+            <option value="sleep accessories">
+            <option value="posture accessories">
+            <option value="home safety products">
+            <option value="festival and seasonal products">
+            <option value="eco friendly products">
+            <option value="digital product accessories">
+            <option value="宠物用品 pet supplies">
+            <option value="宠物清洁 pet cleaning supplies">
+            <option value="猫用品 cat supplies">
+            <option value="狗用品 dog supplies">
+            <option value="家居收纳 home organization">
+            <option value="清洁工具 cleaning tools">
+            <option value="浴室用品 bathroom accessories">
+            <option value="家居装饰 home decor">
+            <option value="厨房小工具 kitchen gadgets">
+            <option value="厨房收纳 kitchen storage">
+            <option value="咖啡配件 coffee accessories">
+            <option value="美妆工具 beauty tools">
+            <option value="护肤工具 skincare devices">
+            <option value="美发工具 hair styling tools">
+            <option value="手机配件 phone accessories">
+            <option value="充电配件 charging accessories">
+            <option value="电脑桌面 desk setup gadgets">
+            <option value="汽车配件 car accessories">
+            <option value="户外露营 outdoor gear">
+            <option value="旅行配件 travel accessories">
+            <option value="健身配件 fitness accessories">
+            <option value="母婴用品 baby products">
+            <option value="办公小物 office gadgets">
+            <option value="玩具兴趣 toys and hobbies">
+            <option value="派对用品 party supplies">
+            <option value="园艺工具 garden tools">
+            <option value="时尚配件 fashion accessories">
+            <option value="穆斯林时尚 Muslim fashion accessories">
+          </datalist>
+        </form>
+      </section>
+
+      <section class="results-panel">
+        <div class="summary-strip">
+          <div>
+            <span class="metric-label">候选产品</span>
+            <strong id="candidateCount">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">最高分</span>
+            <strong id="topScore">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">榜单</span>
+            <strong id="activeMode">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">高可信</span>
+            <strong id="highConfidence">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">报告</span>
+            <a id="downloadReport" href="/report.md" target="_blank">查看 Markdown</a>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="secondary-button" id="copyReportButton">复制报告</button>
+          <button type="button" class="secondary-button" id="exportCsvButton">导出 CSV</button>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          输入目标市场和类目，点击开始分析。
+        </div>
+
+        <div id="ranking" class="ranking"></div>
+        <article id="detail" class="detail-panel hidden"></article>
+
+        <details class="markdown-box">
+          <summary>查看 Markdown 原始报告</summary>
+          <pre id="markdownReport"></pre>
+        </details>
+      </section>
+    </main>
+
+    <script src="app.js?v=20260514-14"></script>
+  </body>
+</html>

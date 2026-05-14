@@ -1,0 +1,38 @@
+{
+  "market": "Thailand",
+  "platform": "TikTok Shop",
+  "audience": "cat owners",
+  "category": "pet supplies",
+  "price_range": "300-1200",
+  "currency": "THB",
+  "ranking_mode": "hot_sales",
+  "cycle": "week",
+  "min_score": 0,
+  "max_risk_count": 3,
+  "target_selling_price": "699",
+  "product_cost": "180",
+  "shipping_cost": "70",
+  "platform_fee_rate": "8",
+  "return_rate": "3",
+  "ad_budget": "3000",
+  "data_sources": [
+    "tiktok",
+    "amazon",
+    "aliexpress",
+    "1688",
+    "creator",
+    "problem"
+  ],
+  "preferences": [
+    "lightweight",
+    "visual demo",
+    "low compliance risk",
+    "easy to source"
+  ],
+  "seed_keywords": [
+    "cat grooming",
+    "cat hair remover",
+    "cat window bed",
+    "interactive cat toy"
+  ]
+}
