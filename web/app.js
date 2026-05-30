@@ -14,16 +14,35 @@ const clearButton = document.querySelector("#clearButton");
 const copyReportButton = document.querySelector("#copyReportButton");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const sourceStatus = document.querySelector("#sourceStatus");
+const tiktokFilterModal = document.querySelector("#tiktokFilterModal");
+const tiktokFilterWindow = document.querySelector(".filter-window");
+const tiktokFilterHead = document.querySelector(".filter-window-head");
+const tiktokFilterTitle = document.querySelector("#tiktokFilterTitle");
+const tiktokFilterClose = document.querySelector("#tiktokFilterClose");
+const tiktokNegativeWords = document.querySelector("#tiktokNegativeWords");
+const tiktokIncludeWords = document.querySelector("#tiktokIncludeWords");
+const tiktokSourceFilter = document.querySelector("#tiktokSourceFilter");
+const tiktokYearFrom = document.querySelector("#tiktokYearFrom");
+const tiktokYearTo = document.querySelector("#tiktokYearTo");
+const tiktokHideHistorical = document.querySelector("#tiktokHideHistorical");
+const tiktokHideUnknown = document.querySelector("#tiktokHideUnknown");
+const tiktokApplyFilter = document.querySelector("#tiktokApplyFilter");
+const tiktokResetFilter = document.querySelector("#tiktokResetFilter");
+const tiktokFilterStatus = document.querySelector("#tiktokFilterStatus");
+const tiktokFilterResults = document.querySelector("#tiktokFilterResults");
 const presetSelects = document.querySelectorAll(".preset-select");
 const unlimitedToggles = document.querySelectorAll(".unlimited-toggle");
 const priceMinInput = form.elements.price_min;
 const priceMaxInput = form.elements.price_max;
 const selectOnFocusInputs = document.querySelectorAll('input[name="price_min"], input[name="price_max"]');
 const scoutRequestTimeoutMs = 60000;
+const tiktokFilterPositionKey = "novelty-scout-tiktok-filter-position";
 
 let allCandidates = [];
 let candidates = [];
 let activeIndex = 0;
+let activeTiktokCandidate = null;
+let tiktokFilterDrag = null;
 
 const audiencePresets = [
   "养猫人群", "养狗人群", "宠物主人", "小户型养宠人群", "新手铲屎官",
@@ -120,6 +139,7 @@ localizePresetLists();
 syncPriceRange();
 populatePresetSelects();
 loadSourceStatus();
+bindTiktokFilterWindow();
 
 presetSelects.forEach((select) => {
   select.addEventListener("change", () => {
@@ -172,7 +192,6 @@ form.addEventListener("submit", async (event) => {
         price_range: unlimitedValue("price_range", data.get("price_range")),
         currency: data.get("currency"),
         ranking_mode: data.get("ranking_mode"),
-        cycle: data.get("cycle"),
         data_sources: data.getAll("data_sources"),
         preferences: data.get("preferences"),
         seed_keywords: data.get("seed_keywords"),
@@ -420,6 +439,7 @@ function renderResults(result) {
       <span class="rank-badge">${index + 1}</span>
       <a class="product-main-link" href="${escapeAttribute(candidate.primary_link || buildFallbackLink(candidate.name))}" target="_blank" rel="noreferrer">
         <p class="product-name">${escapeHtml(candidate.name)}</p>
+        ${freshnessBadge(candidate.freshness || candidate.leaderboard_metrics || {})}
         <span class="row-meta">${escapeHtml(candidate.grade)} | 可信度 ${escapeHtml(candidate.data_confidence?.label || "-")} | ${escapeHtml(candidate.ranking_reason || "")}</span>
       </a>
       <span class="score-block">
@@ -434,6 +454,13 @@ function renderResults(result) {
     button.addEventListener("click", () => {
       activeIndex = Number(button.dataset.index);
       renderResults({ report: markdownReport.textContent });
+    });
+  });
+  ranking.querySelectorAll(".product-main-link").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const row = event.currentTarget.closest(".product-row");
+      const candidate = candidates[Number(row?.dataset.index || activeIndex)];
+      handleAutoTiktokLink(event, candidate);
     });
   });
 
@@ -456,6 +483,7 @@ function renderDetail(candidate) {
   const confidence = candidate.data_confidence || {};
   const risk = candidate.risk_assessment || {};
   const density = candidate.competitor_density || {};
+  const freshness = candidate.freshness || {};
   const sourceBreakdown = candidate.free_signal_breakdown || [];
   detail.innerHTML = `
     <h2>${escapeHtml(candidate.name)}</h2>
@@ -463,6 +491,7 @@ function renderDetail(candidate) {
     <div class="detail-tabs">
       <button type="button" class="tab-button active" data-tab="decision">机会判断</button>
       <button type="button" class="tab-button" data-tab="evidence">数据证据</button>
+      <button type="button" class="tab-button" data-tab="tiktok">TikTok过滤</button>
       <button type="button" class="tab-button" data-tab="sourcing">供应链</button>
       <button type="button" class="tab-button" data-tab="content">内容脚本</button>
       <button type="button" class="tab-button" data-tab="risk">风险核查</button>
@@ -475,6 +504,7 @@ function renderDetail(candidate) {
       ${metricChip("达人信号", metrics.influencer_signal)}
       ${metricChip("直播信号", metrics.live_count || metrics.estimated_live_count)}
       ${metricChip("佣金率", `${metrics.commission_rate || metrics.estimated_commission_rate || 0}%`)}
+      ${metricChip("时效性", `${freshness.label || metrics.freshness_label || "-"}`)}
     </div>
     <div class="score-grid">
       ${scoreChip("新奇度", candidate.scores.novelty)}
@@ -489,6 +519,7 @@ function renderDetail(candidate) {
         ${infoBlock("适合测试原因", candidate.decision_summary)}
         ${infoBlock("上榜原因", candidate.ranking_reason)}
         ${infoBlock("可信度", `${confidence.label || "-"}：${confidence.reason || ""}`)}
+        ${infoBlock("时效性", `${freshness.label || metrics.freshness_label || "-"}：${freshness.reason || metrics.freshness_reason || "未识别明确发布时间，需点击证据复核。"}`)}
         ${infoBlock("竞品密度", `${density.label || "-"}：${density.reason || ""}`)}
         ${infoBlock("数据说明", metrics.is_estimated ? "销量/GMV为估算信号，不是平台真实销量。" : "结构化榜单/CSV字段。")}
         ${infoBlock("平台类目", candidate.category_name || "-")}
@@ -525,11 +556,29 @@ function renderDetail(candidate) {
           ${candidate.evidence.map((item) => `
             <li>
               <strong>[${escapeHtml(item.type || item.source)}]</strong>
+              ${item.freshness?.label ? `<span class="evidence-freshness">${escapeHtml(item.freshness.label)}</span>` : ""}
               ${item.link ? `<a href="${escapeAttribute(item.link)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+              ${item.freshness?.reason ? `<br><small>${escapeHtml(item.freshness.reason)}</small>` : ""}
               ${item.snippet ? `<br>${escapeHtml(item.snippet)}` : ""}
             </li>
           `).join("")}
         </ul>
+      </div>
+    </section>
+    <section class="tab-panel" data-panel="tiktok">
+      <div class="info-block tiktok-filter-entry">
+        <h3>TikTok 过滤窗</h3>
+        <p>支持两种方式：工具内过滤当前整理出的 TikTok 公开证据；也可以像小红书 skill 一样，通过 Chrome AppleScript 把浮窗注入到已打开的 TikTok 页面。Chrome 需要开启“查看 > 开发者 > 允许 Apple 事件中的 JavaScript”。</p>
+        <div class="tiktok-filter-summary">
+          ${metricChip("TikTok线索", (candidate.tiktok_filter_items || []).length)}
+          ${metricChip("可打开链接", (candidate.tiktok_filter_items || []).filter((item) => item.link).length)}
+          ${metricChip("历史信号", (candidate.tiktok_filter_items || []).filter((item) => item.freshness?.label?.includes("历史")).length)}
+        </div>
+        <div class="tiktok-filter-actions">
+          <button type="button" class="detail-button tiktok-site-panel-button" data-index="${activeIndex}">安装到已打开的 TikTok 页面</button>
+          <button type="button" class="detail-button tiktok-filter-button" data-index="${activeIndex}">打开工具内过滤窗</button>
+        </div>
+        <p class="tiktok-panel-install-status"></p>
       </div>
     </section>
     <section class="tab-panel" data-panel="sourcing">
@@ -593,6 +642,352 @@ function renderDetail(candidate) {
     form.seed_keywords.value = event.currentTarget.dataset.product || candidate.name;
     form.dispatchEvent(new Event("submit"));
   });
+
+  detail.querySelector(".tiktok-filter-button")?.addEventListener("click", () => {
+    openTiktokFilterWindow(candidate);
+  });
+
+  detail.querySelector(".tiktok-site-panel-button")?.addEventListener("click", (event) => {
+    installTiktokSitePanel(candidate, event.currentTarget);
+  });
+
+  detail.querySelectorAll('a[href*="tiktok.com"]').forEach((link) => {
+    link.addEventListener("click", (event) => handleAutoTiktokLink(event, candidate));
+  });
+}
+
+function handleAutoTiktokLink(event, candidate) {
+  const link = event.currentTarget;
+  const url = link?.href || "";
+  if (!isTikTokUrl(url)) {
+    return;
+  }
+  event.preventDefault();
+  installTiktokSitePanel(candidate || candidates[activeIndex], null, url);
+}
+
+function isTikTokUrl(url) {
+  try {
+    return /(^|\.)tiktok\.com$/i.test(new URL(url).hostname);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function installTiktokSitePanel(candidate, button = null, targetUrl = "") {
+  const status = detail.querySelector(".tiktok-panel-install-status");
+  const previousText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "正在安装...";
+  }
+  statusPill.textContent = "Opening TikTok";
+  statusPill.className = "status-pill running";
+  if (status) {
+    status.textContent = targetUrl
+      ? "正在用 Chrome 打开 TikTok 链接并自动注入浮窗..."
+      : "正在把浮窗注入到 Chrome 里的 TikTok 页面。如果没有 TikTok tab，会自动打开一个搜索页。";
+    status.classList.remove("error");
+  }
+  try {
+    const response = await fetch("/api/install-tiktok-panel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyword: candidate?.name || "",
+        url: targetUrl,
+        negative_words: "广告, 招募, 代理, 私信, agency, hiring, wholesale",
+        include_words: "",
+        author_words: "",
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "TikTok 浮窗注入失败");
+    }
+    if (status) {
+      status.textContent = `已自动安装到 TikTok 页面：当前隐藏 ${result.hidden ?? 0} 条，显示 ${result.visible ?? 0} 条。请在 Chrome 的 TikTok tab 查看右侧浮窗。`;
+    }
+    statusPill.textContent = "Done";
+    statusPill.className = "status-pill";
+  } catch (error) {
+    if (status) {
+      status.textContent = `${error.message || error}。请确认用 Google Chrome 打开 TikTok，并在 Chrome 菜单栏开启“查看 > 开发者 > 允许 Apple 事件中的 JavaScript”。`;
+      status.classList.add("error");
+    }
+    statusPill.textContent = "Error";
+    statusPill.className = "status-pill error";
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText;
+    }
+  }
+}
+
+function bindTiktokFilterWindow() {
+  if (!tiktokFilterModal) {
+    return;
+  }
+  tiktokFilterClose?.addEventListener("click", closeTiktokFilterWindow);
+  bindTiktokFilterDrag();
+  tiktokApplyFilter?.addEventListener("click", renderTiktokFilterResults);
+  tiktokResetFilter?.addEventListener("click", () => {
+    tiktokNegativeWords.value = "";
+    tiktokIncludeWords.value = "";
+    tiktokSourceFilter.value = "all";
+    tiktokYearFrom.value = "";
+    tiktokYearTo.value = "";
+    tiktokHideHistorical.checked = false;
+    tiktokHideUnknown.checked = false;
+    renderTiktokFilterResults();
+  });
+  tiktokFilterResults?.addEventListener("click", (event) => {
+    const link = event.target.closest('a[href*="tiktok.com"]');
+    if (!link) {
+      return;
+    }
+    event.preventDefault();
+    installTiktokSitePanel(activeTiktokCandidate || candidates[activeIndex], null, link.href);
+  });
+  [tiktokNegativeWords, tiktokIncludeWords].forEach((input) => {
+    input?.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        renderTiktokFilterResults();
+      }
+    });
+  });
+  [tiktokSourceFilter, tiktokYearFrom, tiktokYearTo, tiktokHideHistorical, tiktokHideUnknown].forEach((input) => {
+    input?.addEventListener("change", renderTiktokFilterResults);
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !tiktokFilterModal.classList.contains("hidden")) {
+      closeTiktokFilterWindow();
+    }
+  });
+}
+
+function openTiktokFilterWindow(candidate) {
+  activeTiktokCandidate = candidate;
+  tiktokFilterTitle.textContent = `${candidate.name} · TikTok 过滤窗`;
+  tiktokFilterModal.classList.remove("hidden");
+  tiktokFilterModal.setAttribute("aria-hidden", "false");
+  restoreTiktokFilterPosition();
+  renderTiktokFilterResults();
+}
+
+function closeTiktokFilterWindow() {
+  tiktokFilterModal?.classList.add("hidden");
+  tiktokFilterModal?.setAttribute("aria-hidden", "true");
+}
+
+function bindTiktokFilterDrag() {
+  if (!tiktokFilterHead || !tiktokFilterWindow) {
+    return;
+  }
+  tiktokFilterHead.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button")) {
+      return;
+    }
+    const rect = tiktokFilterWindow.getBoundingClientRect();
+    tiktokFilterDrag = {
+      dx: event.clientX - rect.left,
+      dy: event.clientY - rect.top,
+    };
+    tiktokFilterWindow.classList.add("dragging");
+    tiktokFilterHead.setPointerCapture(event.pointerId);
+  });
+  tiktokFilterHead.addEventListener("pointermove", (event) => {
+    if (!tiktokFilterDrag) {
+      return;
+    }
+    moveTiktokFilterWindow(
+      event.clientX - tiktokFilterDrag.dx,
+      event.clientY - tiktokFilterDrag.dy,
+    );
+  });
+  tiktokFilterHead.addEventListener("pointerup", () => {
+    if (!tiktokFilterDrag) {
+      return;
+    }
+    tiktokFilterDrag = null;
+    tiktokFilterWindow.classList.remove("dragging");
+    saveTiktokFilterPosition();
+  });
+  tiktokFilterHead.addEventListener("pointercancel", () => {
+    tiktokFilterDrag = null;
+    tiktokFilterWindow.classList.remove("dragging");
+  });
+}
+
+function moveTiktokFilterWindow(left, top) {
+  if (!tiktokFilterWindow) {
+    return;
+  }
+  const margin = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - tiktokFilterWindow.offsetWidth - margin);
+  const maxTop = Math.max(margin, window.innerHeight - tiktokFilterWindow.offsetHeight - margin);
+  const safeLeft = Math.max(margin, Math.min(maxLeft, left));
+  const safeTop = Math.max(margin, Math.min(maxTop, top));
+  tiktokFilterModal.style.left = `${safeLeft}px`;
+  tiktokFilterModal.style.top = `${safeTop}px`;
+  tiktokFilterModal.style.right = "auto";
+  tiktokFilterModal.style.bottom = "auto";
+}
+
+function saveTiktokFilterPosition() {
+  if (!tiktokFilterWindow) {
+    return;
+  }
+  const rect = tiktokFilterWindow.getBoundingClientRect();
+  localStorage.setItem(tiktokFilterPositionKey, JSON.stringify({
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+  }));
+}
+
+function restoreTiktokFilterPosition() {
+  if (!tiktokFilterWindow || !tiktokFilterModal) {
+    return;
+  }
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(tiktokFilterPositionKey) || "null");
+  } catch (error) {
+    saved = null;
+  }
+  if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+    moveTiktokFilterWindow(saved.left, saved.top);
+    return;
+  }
+  tiktokFilterModal.style.left = "auto";
+  tiktokFilterModal.style.top = "96px";
+  tiktokFilterModal.style.right = "16px";
+  tiktokFilterModal.style.bottom = "auto";
+}
+
+function renderTiktokFilterResults() {
+  if (!tiktokFilterResults || !tiktokFilterStatus) {
+    return;
+  }
+  const items = activeTiktokCandidate?.tiktok_filter_items || [];
+  if (!activeTiktokCandidate) {
+    tiktokFilterStatus.textContent = "等待选择商品。";
+    tiktokFilterResults.innerHTML = "";
+    return;
+  }
+  const filters = readTiktokFilters();
+  const classified = items.map((item) => classifyTiktokFilterItem(item, filters));
+  const visible = classified.filter((item) => item.visible);
+  const hidden = classified.length - visible.length;
+  const unknownDates = classified.filter((item) => isUnknownFreshness(item.freshness)).length;
+  tiktokFilterStatus.textContent = `共 ${classified.length} 条 TikTok 线索，显示 ${visible.length} 条，隐藏 ${hidden} 条，未识别时间 ${unknownDates} 条。`;
+  tiktokFilterResults.innerHTML = visible.length
+    ? visible.map(renderTiktokFilterItem).join("")
+    : `<div class="empty-state small-empty">没有符合条件的 TikTok 线索，请放宽过滤条件。</div>`;
+}
+
+function readTiktokFilters() {
+  return {
+    negativeWords: splitFilterWords(tiktokNegativeWords?.value || ""),
+    includeWords: splitFilterWords(tiktokIncludeWords?.value || ""),
+    sourceGroup: tiktokSourceFilter?.value || "all",
+    yearFrom: parseOptionalNumber(tiktokYearFrom?.value),
+    yearTo: parseOptionalNumber(tiktokYearTo?.value),
+    hideHistorical: Boolean(tiktokHideHistorical?.checked),
+    hideUnknown: Boolean(tiktokHideUnknown?.checked),
+  };
+}
+
+function classifyTiktokFilterItem(item, filters) {
+  const haystack = [
+    item.label,
+    item.title,
+    item.snippet,
+    item.link,
+    item.type,
+    item.freshness?.label,
+    item.freshness?.reason,
+  ].filter(Boolean).join("\n").toLocaleLowerCase();
+  const reasons = [];
+  const negativeHits = filters.negativeWords.filter((word) => haystack.includes(word.toLocaleLowerCase()));
+  const includeHits = filters.includeWords.filter((word) => haystack.includes(word.toLocaleLowerCase()));
+  const year = Number(item.year || item.freshness?.latest_year || 0);
+  if (filters.sourceGroup !== "all" && item.source_group !== filters.sourceGroup) {
+    reasons.push("source");
+  }
+  if (negativeHits.length) {
+    reasons.push(`排除词: ${negativeHits.join(", ")}`);
+  }
+  if (filters.includeWords.length && !includeHits.length) {
+    reasons.push("缺少必须包含词");
+  }
+  if (filters.hideHistorical && String(item.freshness?.label || "").includes("历史")) {
+    reasons.push("历史信号");
+  }
+  if (filters.hideUnknown && isUnknownFreshness(item.freshness)) {
+    reasons.push("未识别时间");
+  }
+  if (filters.yearFrom && (!year || year < filters.yearFrom)) {
+    reasons.push("早于开始年份");
+  }
+  if (filters.yearTo && (!year || year > filters.yearTo)) {
+    reasons.push("晚于结束年份");
+  }
+  return { ...item, visible: reasons.length === 0, hiddenReasons: reasons, negativeHits, includeHits };
+}
+
+function renderTiktokFilterItem(item) {
+  const freshness = item.freshness || {};
+  const hiddenReasonText = item.hiddenReasons?.length ? `<small>隐藏原因：${escapeHtml(item.hiddenReasons.join("；"))}</small>` : "";
+  const freshnessText = freshness.label ? `<span class="evidence-freshness">${escapeHtml(freshness.label)}</span>` : "";
+  const link = item.link
+    ? `<a class="tiktok-open-link" href="${escapeAttribute(item.link)}" target="_blank" rel="noreferrer">打开</a>`
+    : `<span class="tiktok-open-link disabled">无链接</span>`;
+  return `
+    <article class="tiktok-filter-item">
+      <div>
+        <div class="tiktok-filter-meta">
+          <span>${escapeHtml(item.label || "TikTok 线索")}</span>
+          <span>${escapeHtml(groupLabel(item.source_group))}</span>
+          ${freshnessText}
+        </div>
+        <h3>${escapeHtml(item.title || activeTiktokCandidate?.name || "TikTok 线索")}</h3>
+        <p>${escapeHtml(item.snippet || "无摘要，点击链接人工复核。")}</p>
+        ${freshness.reason ? `<small>${escapeHtml(freshness.reason)}</small>` : ""}
+        ${hiddenReasonText}
+      </div>
+      ${link}
+    </article>
+  `;
+}
+
+function splitFilterWords(value) {
+  return String(value || "")
+    .replace(/\n/g, ",")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalNumber(value) {
+  const number = Number(String(value || "").trim());
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function isUnknownFreshness(freshness) {
+  const label = String(freshness?.label || "");
+  return !label || label.includes("未识别");
+}
+
+function groupLabel(group) {
+  return {
+    tiktok: "TikTok",
+    shop: "TikTok Shop",
+    creative: "Creative Center",
+    creator: "达人/联盟",
+    other: "其他",
+  }[group] || "TikTok";
 }
 
 async function loadSourceStatus() {
@@ -625,6 +1020,18 @@ function scoreChip(label, value) {
 
 function metricChip(label, value) {
   return `<div class="metric-chip"><span>${label}</span><strong>${escapeHtml(value ?? 0)}</strong></div>`;
+}
+
+function freshnessBadge(freshness) {
+  const label = freshness.label || freshness.freshness_label || "未识别时间";
+  const score = Number(freshness.score || freshness.freshness_score || 0);
+  const className = label.includes("历史")
+    ? "history"
+    : label.includes("当前") || label.includes("近一年")
+      ? "fresh"
+      : "unknown";
+  const scoreText = score ? ` · ${score}` : "";
+  return `<span class="freshness-badge ${className}">时效性：${escapeHtml(label)}${escapeHtml(scoreText)}</span>`;
 }
 
 function infoBlock(title, body) {

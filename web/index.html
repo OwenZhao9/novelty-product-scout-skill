@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novelty Product Scout</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-12">
+    <link rel="stylesheet" href="styles.css?v=20260530-2">
   </head>
   <body>
     <main class="app-shell">
@@ -79,14 +79,6 @@
               <option value="content_viral">内容传播榜</option>
               <option value="category_opportunity">类目机会榜</option>
               <option value="low_risk">低风险测试榜</option>
-            </select>
-          </label>
-          <label>
-            周期
-            <select name="cycle">
-              <option value="week">周榜</option>
-              <option value="day">天榜</option>
-              <option value="month">月榜</option>
             </select>
           </label>
           <label>
@@ -422,6 +414,59 @@
       </section>
     </main>
 
-    <script src="app.js?v=20260514-18"></script>
+    <div class="filter-modal hidden" id="tiktokFilterModal" aria-hidden="true">
+      <div class="filter-window" role="dialog" aria-modal="false" aria-labelledby="tiktokFilterTitle">
+        <div class="filter-window-head">
+          <div>
+            <p class="eyebrow">TikTok Filter</p>
+            <h2 id="tiktokFilterTitle">TikTok 过滤窗</h2>
+          </div>
+          <button type="button" class="icon-button" id="tiktokFilterClose" aria-label="关闭 TikTok 过滤窗">×</button>
+        </div>
+        <div class="filter-window-body">
+          <div class="filter-controls">
+            <label>
+              内容排除词
+              <textarea id="tiktokNegativeWords" rows="3" placeholder="广告, 招募, 代理, 私信"></textarea>
+            </label>
+            <label>
+              必须包含词
+              <textarea id="tiktokIncludeWords" rows="3" placeholder="review, demo, shop, affiliate"></textarea>
+            </label>
+            <label>
+              来源类型
+              <select id="tiktokSourceFilter">
+                <option value="all">全部 TikTok 线索</option>
+                <option value="tiktok">TikTok 搜索</option>
+                <option value="shop">TikTok Shop</option>
+                <option value="creative">Creative Center</option>
+                <option value="creator">达人/联盟</option>
+                <option value="other">其他相关</option>
+              </select>
+            </label>
+            <div class="filter-year-row">
+              <label>
+                开始年份
+                <input id="tiktokYearFrom" inputmode="numeric" placeholder="例如 2024">
+              </label>
+              <label>
+                结束年份
+                <input id="tiktokYearTo" inputmode="numeric" placeholder="例如 2026">
+              </label>
+            </div>
+            <label class="checkbox-row"><input type="checkbox" id="tiktokHideHistorical"> 隐藏历史信号</label>
+            <label class="checkbox-row"><input type="checkbox" id="tiktokHideUnknown"> 隐藏未识别时间</label>
+            <div class="filter-actions">
+              <button type="button" class="secondary-button" id="tiktokApplyFilter">应用过滤</button>
+              <button type="button" class="secondary-button" id="tiktokResetFilter">重置</button>
+            </div>
+            <p class="filter-status" id="tiktokFilterStatus">等待选择商品。</p>
+          </div>
+          <div class="filter-results" id="tiktokFilterResults"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js?v=20260530-2"></script>
   </body>
 </html>

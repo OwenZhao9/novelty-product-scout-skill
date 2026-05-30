@@ -15,6 +15,7 @@ It helps users answer:
 - What keywords should I search on Amazon, AliExpress, 1688, TikTok, or Xiaohongshu?
 - What is the first small-budget validation plan?
 - What risks should I avoid before buying inventory?
+- Which TikTok search results should be hidden or kept after applying negative words, required words, author filters, and date filters?
 
 ## Best Fit Tasks
 
@@ -47,7 +48,6 @@ The skill accepts a market profile JSON file:
   "price_range": "300-1200",
   "currency": "THB",
   "ranking_mode": "hot_sales",
-  "cycle": "week",
   "min_score": 0,
   "max_risk_count": 3,
   "target_selling_price": "699",
@@ -76,11 +76,53 @@ Ranking modes:
 - `category_opportunity`: demand and virality with controllable competition
 - `low_risk`: safer first-test shortlist
 
-Cycles: `day`, `week`, or `month`.
-
 Supported currencies: `THB`, `CNY`, `VND`, `SGD`, `USD`, `PHP`, `MYR`.
 
 Supported data sources: `tiktok`, `amazon`, `aliexpress`, `1688`, `google_trends`, `xiaohongshu`, `douyin`, `problem`, `creator`.
+
+## TikTok Floating Filter Panel
+
+The web app includes a TikTok page panel that uses the same technical pattern as the Xiaohongshu negative-search skill: a local Node script calls Google Chrome through AppleScript and injects a draggable filter panel into the active TikTok page.
+
+Required macOS Chrome setting:
+
+```text
+查看 > 开发者 > 允许 Apple 事件中的 JavaScript
+```
+
+Web flow:
+
+1. Run `python3 scripts/web_app.py`.
+2. Open `http://127.0.0.1:8765`.
+3. Run analysis and click a candidate.
+4. Open `TikTok过滤`.
+5. Click `安装到已打开的 TikTok 页面`, or click a `tiktok.com` evidence/result link.
+6. Chrome opens the TikTok page and installs the right-side floating panel automatically.
+
+The injected TikTok panel supports:
+
+- content exclusion words
+- required words
+- account / author exclusion words
+- start and end date filters
+- hiding unknown-date cards
+- automatic re-filtering after scroll-loaded content appears
+- draggable saved panel position
+
+Direct CLI flow:
+
+```bash
+node scripts/tiktok_filter_panel.js \
+  --panel \
+  --url "https://www.tiktok.com/search?q=pet%20hair%20remover" \
+  --negative "广告,招募,代理,私信,agency,hiring,wholesale"
+```
+
+Boundaries:
+
+- Only filters content already loaded in the user's Chrome session.
+- Does not bypass login, CAPTCHA, risk controls, paywalls, or access restrictions.
+- TikTok DOM changes can require selector updates.
 
 ## Output
 

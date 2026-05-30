@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ MAX_WEB_QUERIES = 10
 WEB_QUERY_TIMEOUT_SECONDS = 3
 WEB_COLLECTION_BUDGET_SECONDS = 10
 WEB_QUERY_SLEEP_SECONDS = 0.05
+CURRENT_YEAR = date.today().year
 
 MARKET_REGION_ALIASES = {
     "泰国": "TH",
@@ -180,6 +182,8 @@ FREE_SOURCE_GROUPS = {
     "sourcing": {"1688", "alibaba", "sourcing_signal", "alibaba_signal", "seed_sourcing", "seed_alibaba"},
     "community": {"reddit", "quora", "pantip", "problem", "reddit_signal", "quora_signal", "pantip_signal", "problem_signal", "seed_reddit", "seed_quora", "seed_pantip"},
 }
+
+FRESHNESS_SENSITIVE_GROUPS = {"trend", "content", "ads", "marketplace", "community"}
 
 FREE_SOURCE_DEFAULTS = [
     "tiktok",
@@ -526,6 +530,7 @@ class Candidate:
     scores: dict[str, int] = field(default_factory=dict)
     risk_flags: list[str] = field(default_factory=list)
     leaderboard_metrics: dict[str, Any] = field(default_factory=dict)
+    freshness: dict[str, Any] = field(default_factory=dict)
 
     @property
     def evidence_text(self):
@@ -636,7 +641,6 @@ def load_or_prompt_profile(path):
         "market": prompt("Target market", "US"),
         "platform": prompt("Target platform", "TikTok Shop"),
         "ranking_mode": prompt("Ranking mode", "hot_sales"),
-        "cycle": prompt("Cycle", "week"),
         "audience": prompt("Target audience", "cat owners"),
         "category": prompt("Category", "pet supplies"),
         "price_range": prompt("Price range", "300-1200"),
@@ -1143,6 +1147,7 @@ def score_candidates(candidates, profile):
         risk_flags = detect_risks(text)
         test_feasibility = score_test_feasibility(text, source_count, risk_flags)
         group_counts = free_signal_group_counts(candidate)
+        freshness = build_freshness(candidate)
 
         if explicit_sales:
             demand = min(25, max(demand, 14 + min(explicit_sales // 5000, 11)))
@@ -1153,6 +1158,11 @@ def score_candidates(candidates, profile):
         sourcing = min(10, sourcing + min(group_counts.get("sourcing", 0), 2))
         if group_counts.get("marketplace", 0) >= 3:
             competition = max(4, competition - 2)
+        if freshness.get("penalty"):
+            penalty = int(freshness["penalty"])
+            virality = max(1, virality - penalty)
+            demand = max(1, demand - min(penalty, 5))
+            novelty = max(1, novelty - min(penalty // 2, 4))
 
         candidate.scores = {
             "novelty": novelty,
@@ -1165,6 +1175,7 @@ def score_candidates(candidates, profile):
         if candidate.sources == ["seed"]:
             candidate.scores = {key: max(value - 4, 1) for key, value in candidate.scores.items()}
         candidate.risk_flags = risk_flags
+        candidate.freshness = freshness
         candidate.leaderboard_metrics = build_leaderboard_metrics(candidate, profile)
 
 
@@ -1193,7 +1204,16 @@ def rank_candidates(candidates, profile):
             return candidate.leaderboard_metrics.get(key) or 0
         return candidate.scores.get(key) or candidate.total_score
 
-    return sorted(candidates, key=lambda item: (value(item, primary), value(item, secondary), item.total_score), reverse=True)
+    return sorted(
+        candidates,
+        key=lambda item: (
+            value(item, primary),
+            value(item, secondary),
+            item.leaderboard_metrics.get("freshness_score", 0),
+            item.total_score,
+        ),
+        reverse=True,
+    )
 
 
 def build_leaderboard_metrics(candidate, profile):
@@ -1242,6 +1262,11 @@ def build_leaderboard_metrics(candidate, profile):
         "mentions": mentions,
         "opportunity_gap": max(opportunity_gap, 0),
         "risk_adjusted_score": candidate.total_score,
+        "freshness_score": candidate.freshness.get("score", 60),
+        "freshness_label": candidate.freshness.get("label", "未识别时间"),
+        "freshness_reason": candidate.freshness.get("reason", "未识别明确发布时间，需点击证据复核。"),
+        "latest_evidence_year": candidate.freshness.get("latest_year"),
+        "historical_signal_count": candidate.freshness.get("historical_count", 0),
         "cycle": cycle,
         "is_estimated": not bool(explicit_sales or explicit_gmv or explicit_videos or explicit_influencers or explicit_lives),
     }
@@ -1266,6 +1291,100 @@ def source_group_for(source):
         if source in sources:
             return group
     return ""
+
+
+def build_freshness(candidate):
+    dated = []
+    historical_count = 0
+    sensitive_dated = []
+    for signal in candidate.signals:
+        freshness = signal_freshness(signal)
+        if freshness["year"]:
+            dated.append(freshness)
+            if source_group_for(signal.source) in FRESHNESS_SENSITIVE_GROUPS:
+                sensitive_dated.append(freshness)
+            if freshness["bucket"] == "historical" and source_group_for(signal.source) in FRESHNESS_SENSITIVE_GROUPS:
+                historical_count += 1
+
+    if not dated:
+        return {
+            "score": 60,
+            "label": "未识别时间",
+            "reason": "未识别明确发布时间，需点击证据复核；不会把它当成实时热度。",
+            "latest_year": None,
+            "historical_count": 0,
+            "penalty": 0,
+        }
+
+    latest = max(dated, key=lambda item: item["year"])
+    latest_year = latest["year"]
+    latest_age = CURRENT_YEAR - latest_year
+    score = latest["score"]
+    penalty = 0
+    if historical_count:
+        has_recent_sensitive = any(item["age"] <= 1 for item in sensitive_dated)
+        penalty = 3 if has_recent_sensitive else 7
+        score = max(score - penalty * 4, 15)
+
+    if latest_age <= 0:
+        label = "当前信号"
+    elif latest_age == 1:
+        label = "近一年信号"
+    elif latest_age == 2:
+        label = "偏旧信号"
+    else:
+        label = "历史信号"
+
+    reason = f"最新可识别年份 {latest_year}"
+    if historical_count:
+        reason += f"，包含 {historical_count} 条 3 年以上历史内容，已降权处理"
+    else:
+        reason += "，未发现明显过旧内容"
+    return {
+        "score": score,
+        "label": label,
+        "reason": reason,
+        "latest_year": latest_year,
+        "historical_count": historical_count,
+        "penalty": penalty,
+    }
+
+
+def signal_freshness(signal):
+    text = " ".join([signal.title, signal.snippet, signal.notes, signal.link])
+    years = [
+        int(year)
+        for year in re.findall(r"\b(20[0-2]\d)\b", text)
+        if 2018 <= int(year) <= CURRENT_YEAR
+    ]
+    if not years:
+        return {
+            "year": None,
+            "age": None,
+            "score": 60,
+            "bucket": "unknown",
+            "label": "未识别时间",
+            "reason": "未识别明确发布时间，需点击链接复核。",
+        }
+
+    year = max(years)
+    age = max(CURRENT_YEAR - year, 0)
+    if age <= 0:
+        score, bucket, label = 100, "current", "当前信号"
+    elif age == 1:
+        score, bucket, label = 82, "recent", "近一年信号"
+    elif age == 2:
+        score, bucket, label = 55, "aging", "偏旧信号"
+    else:
+        score, bucket, label = 25, "historical", "历史信号"
+    return {
+        "year": year,
+        "age": age,
+        "score": score,
+        "bucket": bucket,
+        "label": label,
+        "reason": f"识别到 {year} 年内容。",
+    }
 
 
 def free_signal_breakdown(candidate):
@@ -1386,7 +1505,6 @@ def build_report(profile, ranked):
     report.append(f"- Category: {profile.get('category', '')}\n")
     report.append(f"- Price range: {format_price_range(profile)}\n")
     report.append(f"- Ranking mode: {ranking_mode_label(profile.get('ranking_mode'))}\n")
-    report.append(f"- Cycle: {cycle_label(profile.get('cycle'))}\n")
     report.append("- Data source: 信源采集；销量/GMV为机会评分估算，不是平台真实销量\n")
     report.append(f"- Sources: {', '.join(source_label(item) for item in profile.get('data_sources', []))}\n")
     report.append(f"- Preferences: {', '.join(profile.get('preferences', []))}\n\n")
@@ -1399,19 +1517,19 @@ def build_report(profile, ranked):
             "Treat this as a test shortlist, not a guaranteed viral prediction.\n\n"
         )
     else:
-        report.append("No candidates were found. Broaden the category, price band, or ranking cycle.\n\n")
+        report.append("No candidates were found. Broaden the category, price band, or selected sources.\n\n")
 
     report.append("## Opportunity Ranking\n\n")
     sales_label = "Sales Estimate"
     gmv_label = "GMV Estimate"
-    report.append(f"| Rank | Product | Score | Confidence | {sales_label} | {gmv_label} | Videos | Influencers | Risk |\n")
-    report.append("| ---: | --- | ---: | --- | ---: | ---: | ---: | ---: | --- |\n")
+    report.append(f"| Rank | Product | Score | Confidence | Freshness | {sales_label} | {gmv_label} | Videos | Influencers | Risk |\n")
+    report.append("| ---: | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | --- |\n")
     for index, candidate in enumerate(ranked[:15], start=1):
         risk = ", ".join(candidate.risk_flags[:3]) if candidate.risk_flags else "none detected"
         metrics = candidate.leaderboard_metrics
         confidence = build_confidence(candidate)
         report.append(
-            f"| {index} | {candidate.name} | {candidate.total_score} | {confidence['label']} | {metrics.get('sales_signal', 0)} | "
+            f"| {index} | {candidate.name} | {candidate.total_score} | {confidence['label']} | {metrics.get('freshness_label', '-')} | {metrics.get('sales_signal', 0)} | "
             f"{format_money(metrics.get('gmv_signal', 0), profile)} | {metrics.get('video_signal', 0)} | {metrics.get('influencer_signal', 0)} | {risk} |\n"
         )
 
@@ -1457,6 +1575,7 @@ def build_candidate_section(index, candidate, profile):
     section.append(f"- Likely pain point: {infer_pain_point(product, category, audience)}\n")
     section.append(f"- Decision: {build_decision_summary(candidate, profile)}\n")
     section.append(f"- Data confidence: {build_confidence(candidate)['label']} - {build_confidence(candidate)['reason']}\n")
+    section.append(f"- Freshness: {metrics.get('freshness_label', '-')} - {metrics.get('freshness_reason', '')}\n")
     section.append(f"- Competition density: {build_competitor_density(candidate)['label']} - {build_competitor_density(candidate)['reason']}\n")
     section.append(f"- Short-video hook: {hook}\n")
     section.append(f"- Livestream angle: Show the problem first, demonstrate the product in under 10 seconds, then compare before/after.\n")
@@ -1485,8 +1604,9 @@ def build_candidate_section(index, candidate, profile):
     for signal in candidate.signals[:4]:
         title = signal.title or signal.product
         snippet = signal.snippet or signal.notes
+        freshness = signal_freshness(signal)
         link = f" ({signal.link})" if signal.link else ""
-        section.append(f"- [{source_label(signal.source)}] {title}{link}\n")
+        section.append(f"- [{source_label(signal.source)} · {freshness['label']}] {title}{link}\n")
         if snippet:
             section.append(f"  - {snippet[:240]}\n")
 
@@ -1521,6 +1641,7 @@ def candidate_to_dict(candidate, profile):
         "risk_flags": candidate.risk_flags,
         "scores": candidate.scores,
         "leaderboard_metrics": metrics,
+        "freshness": candidate.freshness,
         "currency": normalize_currency(profile.get("currency", "")),
         "formatted_price_range": format_price_range(profile),
         "formatted_gmv": format_money(metrics.get("gmv", 0), profile),
@@ -1547,11 +1668,13 @@ def candidate_to_dict(candidate, profile):
                 "link": signal.link,
                 "sales": signal.sales,
                 "gmv": signal.gmv,
+                "freshness": signal_freshness(signal),
                 "rank_position": signal.rank_position,
                 "category_name": signal.category_name,
             }
             for signal in candidate.signals[:6]
         ],
+        "tiktok_filter_items": build_tiktok_filter_items(candidate, profile, destination_links),
         "verification_checklist": build_verification_checklist(candidate, profile),
         "validation_plan": build_validation_plan(candidate, profile),
         "video_scripts": build_video_scripts(candidate.name, profile.get("audience", "target users")),
@@ -1821,6 +1944,107 @@ def build_destination_links(candidate, profile):
         if len(links) >= 10:
             break
     return links
+
+
+def build_tiktok_filter_items(candidate, profile, destination_links):
+    items = []
+    seen = set()
+    tiktok_sources = {
+        "tiktok",
+        "tiktok_signal",
+        "tiktok_shop_signal",
+        "tiktok_creative",
+        "tiktok_creative_signal",
+        "seed_tiktok",
+        "seed_tiktok_creative",
+        "creator",
+        "creator_signal",
+        "seed_creator",
+    }
+
+    def add_item(label, title, snippet, link, source_key, freshness=None, item_type="证据"):
+        key = link or f"{source_key}:{title}:{snippet}"
+        if key in seen:
+            return
+        seen.add(key)
+        freshness = freshness or {}
+        items.append({
+            "label": label,
+            "title": title or candidate.name,
+            "snippet": snippet or "",
+            "link": link or "",
+            "source_key": source_key,
+            "source_group": tiktok_filter_group(source_key, label, link),
+            "type": item_type,
+            "freshness": freshness,
+            "year": freshness.get("latest_year") or "",
+        })
+
+    for signal in candidate.signals:
+        label = source_label(signal.source)
+        title = signal.title or signal.product or candidate.name
+        snippet = signal.snippet or signal.notes or ""
+        link = signal.link or signal.product_url or ""
+        haystack = " ".join([signal.source or "", label, title, snippet, link]).lower()
+        if signal.source in tiktok_sources or "tiktok" in haystack or "creator" in haystack or "affiliate" in haystack:
+            add_item(
+                label=label or "TikTok 线索",
+                title=title,
+                snippet=snippet,
+                link=link,
+                source_key=signal.source or "tiktok",
+                freshness=signal_freshness(signal),
+                item_type=signal_type(signal),
+            )
+
+    for link in destination_links:
+        label = link.get("label", "")
+        url = link.get("url", "")
+        haystack = f"{label} {url}".lower()
+        if "tiktok" in haystack:
+            add_item(
+                label=label,
+                title=f"{candidate.name} - {label}",
+                snippet="用于跳转复核 TikTok 搜索、TikTok Shop 或 Creative Center 的入口。",
+                link=url,
+                source_key="tiktok_shortcut",
+                freshness={"label": "跳转入口", "score": 0, "reason": "这是搜索入口，不代表平台真实销量。"},
+                item_type="跳转入口",
+            )
+
+    if not items:
+        product = candidate.name
+        for label, url in [
+            ("TikTok search", f"https://www.tiktok.com/search?q={urllib.parse.quote(product)}"),
+            ("TikTok Shop search", f"https://www.tiktok.com/shop/s/{urllib.parse.quote(product)}"),
+            ("TikTok Creative Center", f"https://ads.tiktok.com/business/creativecenter/inspiration/topads/pc/en?search={urllib.parse.quote(product)}"),
+        ]:
+            add_item(
+                label=label,
+                title=f"{product} - {label}",
+                snippet="未采集到明确 TikTok 证据，提供搜索入口用于人工复核。",
+                link=url,
+                source_key="tiktok_shortcut",
+                freshness={"label": "跳转入口", "score": 0, "reason": "这是搜索入口，不代表平台真实销量。"},
+                item_type="跳转入口",
+            )
+
+    return items[:24]
+
+
+def tiktok_filter_group(source_key, label, link):
+    text = " ".join([str(source_key or ""), str(label or ""), str(link or "")]).lower()
+    if str(source_key or "") in {"tiktok", "tiktok_signal", "seed_tiktok"}:
+        return "tiktok"
+    if "creative" in text or "ads.tiktok.com" in text:
+        return "creative"
+    if str(source_key or "") == "tiktok_shop_signal" or "/shop/" in text or "shop/s" in text:
+        return "shop"
+    if "creator" in text or "affiliate" in text:
+        return "creator"
+    if "tiktok" in text:
+        return "tiktok"
+    return "other"
 
 
 def build_ranking_reason(candidate, profile):

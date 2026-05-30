@@ -72,6 +72,52 @@ Then open:
 http://127.0.0.1:8765
 ```
 
+## TikTok Page Filter Panel
+
+The web app can also install a Xiaohongshu-skill-style floating panel directly into a TikTok page opened in Google Chrome.
+
+One-time Chrome setup on macOS:
+
+```text
+Google Chrome > View > Developer > Allow JavaScript from Apple Events
+```
+
+Chinese Chrome menu:
+
+```text
+查看 > 开发者 > 允许 Apple 事件中的 JavaScript
+```
+
+Use it from the web app:
+
+1. Start the web app and open `http://127.0.0.1:8765`.
+2. Run product analysis.
+3. Click a candidate product.
+4. Open the `TikTok过滤` tab.
+5. Click `安装到已打开的 TikTok 页面`, or click any `tiktok.com` result link.
+6. The app opens the TikTok page in Google Chrome and installs the right-side floating panel automatically.
+
+The TikTok floating panel supports:
+
+- content exclusion words
+- required words
+- account / author exclusion words
+- date range filtering
+- hiding cards with unknown dates
+- automatic filtering for newly loaded cards while scrolling
+- draggable position with saved placement
+
+CLI usage is also available:
+
+```bash
+node scripts/tiktok_filter_panel.js \
+  --panel \
+  --url "https://www.tiktok.com/search?q=pet%20hair%20remover" \
+  --negative "广告,招募,代理,私信,agency,hiring,wholesale"
+```
+
+This feature only works on content already visible or loaded in the user's Chrome session. It does not bypass login, CAPTCHA, platform limits, or access controls.
+
 Run with example config:
 
 ```bash
@@ -115,6 +161,12 @@ novelty-product-scout-skill/
   README.md
   scripts/
     scout_products.py
+    web_app.py
+    tiktok_filter_panel.js
+  web/
+    index.html
+    app.js
+    styles.css
   examples/
     market_profile.json
     input_signals.csv
@@ -128,7 +180,8 @@ novelty-product-scout-skill/
 2. Choose market, platform, category, currency, data sources, and profit assumptions.
 3. Run analysis to generate the leaderboard.
 4. Click a product to inspect opportunity judgment, evidence, sourcing, content scripts, risks, and validation plan.
-5. Export CSV or copy the Markdown report.
+5. Use `TikTok过滤` to either review collected TikTok evidence inside the tool or install the floating panel into a Chrome TikTok page.
+6. Export CSV or copy the Markdown report.
 
 ## Business Value
 

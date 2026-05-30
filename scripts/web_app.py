@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import subprocess
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,12 +23,20 @@ class ScoutHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = self.rfile.read(length).decode("utf-8")
+        if self.path == "/api/install-tiktok-panel":
+            try:
+                data = json.loads(payload or "{}")
+                self.send_json(install_tiktok_panel(data))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, status=500)
+            return
+
         if self.path != "/api/scout":
             self.send_error(404)
             return
 
-        length = int(self.headers.get("Content-Length", "0"))
-        payload = self.rfile.read(length).decode("utf-8")
         try:
             data = json.loads(payload or "{}")
             profile = normalize_profile(data.get("profile") or {})
@@ -99,6 +108,49 @@ def normalize_profile(profile):
         "preferences": split_lines_or_commas(profile.get("preferences") or "lightweight, visual demo, low compliance risk"),
         "seed_keywords": split_lines_or_commas(profile.get("seed_keywords") or ""),
     }
+
+
+def install_tiktok_panel(data):
+    args = [
+        "node",
+        str(ROOT / "scripts" / "tiktok_filter_panel.js"),
+        "--panel",
+        "--json",
+    ]
+    keyword = str(data.get("keyword") or "").strip()
+    target_url = str(data.get("url") or "").strip()
+    negative_words = str(data.get("negative_words") or "广告, 招募, 代理, 私信").strip()
+    include_words = str(data.get("include_words") or "").strip()
+    author_words = str(data.get("author_words") or "").strip()
+    if keyword:
+        args.extend(["--keyword", keyword])
+    if target_url:
+        args.extend(["--url", target_url])
+    if negative_words:
+        args.extend(["--negative", negative_words])
+    if include_words:
+        args.extend(["--include", include_words])
+    if author_words:
+        args.extend(["--author", author_words])
+    completed = subprocess.run(
+        args,
+        cwd=str(ROOT),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+    if completed.returncode != 0:
+        return {
+            "ok": False,
+            "error": stderr or stdout or "TikTok 浮窗注入失败，请确认 Chrome 已打开 TikTok，并允许 Apple Events 执行 JavaScript。",
+        }
+    try:
+        return json.loads(stdout.splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        return {"ok": True, "message": stdout or "TikTok 浮窗已注入"}
 
 
 def parse_int(value, default):
